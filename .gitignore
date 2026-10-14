@@ -1,0 +1,11 @@
+.DS_Store
+
+# mod
+mod/build/
+mod/build-*/
+*.geode
+
+# mcp
+node_modules/
+mcp/dist/
+*.tsbuildinfo

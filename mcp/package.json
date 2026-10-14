@@ -1,0 +1,36 @@
+{
+  "name": "gdbuilder-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets AI assistants build in the Geometry Dash level editor",
+  "type": "module",
+  "bin": {
+    "gdbuilder-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.js"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test \"dist/**/*.test.js\"",
+    "e2e": "tsc && node scripts/e2e.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=20.10"
+  },
+  "keywords": [
+    "mcp",
+    "geometry-dash",
+    "geode",
+    "level-editor"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2"
+  }
+}

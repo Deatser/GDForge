@@ -1,0 +1,28 @@
+{
+	"geode": "5.11.1",
+	"gd": {
+		"win": "2.2081",
+		"mac": "2.2081"
+	},
+	"id": "talha.gdbuilder-ai",
+	"name": "GDBuilder AI",
+	"version": "v0.1.0",
+	"developer": "Talha",
+	"description": "Lets an AI assistant build in the level editor through MCP",
+	"settings": {
+		"enabled": {
+			"type": "bool",
+			"name": "Enable bridge",
+			"description": "Listen on localhost so the GDBuilder MCP server can drive the editor. Takes effect after restarting the game.",
+			"default": true
+		},
+		"port": {
+			"type": "int",
+			"name": "Port",
+			"description": "Local port the bridge listens on. Must match the <cy>GDBUILDER_PORT</c> of the MCP server. Takes effect after restarting the game.",
+			"default": 47821,
+			"min": 1024,
+			"max": 65535
+		}
+	}
+}
