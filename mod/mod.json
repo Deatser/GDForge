@@ -6,7 +6,7 @@
 	},
 	"id": "talha.gdbuilder-ai",
 	"name": "GDBuilder AI",
-	"version": "v0.1.0",
+	"version": "v0.2.0",
 	"developer": "Talha",
 	"description": "Lets an AI assistant build in the level editor through MCP",
 	"settings": {

@@ -113,6 +113,12 @@ test("patching scale replaces the pre-2.2 single scale key", () => {
   assert.equal(patchSaveString("1,1,2,0,3,0,128,3,129,2", { scale: 1 }), "1,1,2,0,3,0");
 });
 
+test("keeps the level settings of a Start Pos", () => {
+  const startPos = "1,31,2,75,3,15,kA2,1,kA4,2,kA22,1";
+  assert.equal(patchSaveString(startPos, { x: 105 }), "1,31,2,105,3,15,kA2,1,kA4,2,kA22,1");
+  assert.deepEqual(decodeObject(startPos).props, { kA2: "1", kA4: "2", kA22: "1" });
+});
+
 test("rejects input the game would misread", () => {
   assert.throws(() => encodeObject({ id: 999999, x: 0, y: 0 }), /Unknown object ID/);
   assert.throws(() => encodeObject({ id: 1, x: 0, y: 0, groups: [0] }), /Group IDs/);

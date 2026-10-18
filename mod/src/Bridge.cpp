@@ -19,6 +19,8 @@ namespace gdbuilder {
                 rpc::registerObjects(registry);
                 rpc::registerLevels(registry);
                 rpc::registerCatalog(registry);
+                rpc::registerPlaytest(registry);
+                rpc::registerScreenshot(registry);
                 return registry;
             }();
             return methods;

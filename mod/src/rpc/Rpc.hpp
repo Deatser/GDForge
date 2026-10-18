@@ -12,6 +12,8 @@ namespace gdbuilder::rpc {
     void registerObjects(RpcRegistry& registry);
     void registerLevels(RpcRegistry& registry);
     void registerCatalog(RpcRegistry& registry);
+    void registerPlaytest(RpcRegistry& registry);
+    void registerScreenshot(RpcRegistry& registry);
 
     struct Editor {
         LevelEditorLayer* layer;

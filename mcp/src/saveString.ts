@@ -3,15 +3,17 @@
 // depends on the kind of object. This is exactly what the editor's copy and
 // paste use, and what the bridge speaks.
 
-// Insertion-ordered so an untouched object serializes back unchanged
-export type Fields = Map<number, string>;
+// Insertion-ordered so an untouched object serializes back unchanged. Keys are
+// numbers, except the level settings a Start Pos carries ("kA2", "kA4", ...).
+export type Fields = Map<number | string, string>;
 
 export function parseFields(object: string): Fields {
   const parts = object.split(",");
   const fields: Fields = new Map();
   for (let i = 0; i + 1 < parts.length; i += 2) {
-    const key = Number(parts[i]);
-    if (Number.isInteger(key)) fields.set(key, parts[i + 1]!);
+    const key = parts[i]!;
+    if (/^\d+$/.test(key)) fields.set(Number(key), parts[i + 1]!);
+    else if (key !== "") fields.set(key, parts[i + 1]!);
   }
   return fields;
 }

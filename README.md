@@ -74,12 +74,22 @@ Changes are not saved until you save in the editor, exactly as with your own edi
 | `gd_get_objects` | Read objects, filtered by area, object ID, group, layer or the current selection |
 | `gd_place_objects` | Place objects (one undo step per call) |
 | `gd_fill_area` | Fill or outline a rectangle with one object |
+| `gd_line` | Place one object along a line, by spacing or by count |
+| `gd_copy` | Duplicate objects with an offset, repeated several times if asked |
+| `gd_map` | ASCII map of an area, one character per grid cell |
 | `gd_edit_objects` | Change any property of existing objects, including trigger settings and groups |
 | `gd_transform_objects` | Move, rotate, scale, flip with the editor's own routines (one undo step, IDs stay valid) |
 | `gd_delete_objects` | Delete objects (one undo step) |
+| | Editing, transforming, copying and deleting take uids, the current selection or an area |
 | `gd_select_objects` | Set the editor's selection |
 | `gd_undo`, `gd_redo` | Step through the editor's history |
 | `gd_set_camera` | Move and zoom the editor view |
+| `gd_playtest`, `gd_test` | Start or stop the playtest; play the level automatically with planned jumps and report where the player died |
+| `gd_screenshot` | Picture of what the game shows |
+| `gd_save_level` | Save the open level and write it to disk |
+| `gd_get_level_string` | The open level as the game saves it, settings included |
+| `gd_set_song`, `gd_find_songs` | Set the level's Newgrounds song; find songs the game already has |
+| `gd_reference` | Common object IDs and measured jump physics for classic play |
 | `gd_search_objects` | Find object IDs by name, category or type; works without the game |
 | `gd_describe_object` | What an object ID is and which properties it accepts |
 | `gd_search_properties` | Look up a property by name or save-string key |
@@ -129,14 +139,14 @@ Two data files describe the game and are generated, not written by hand:
 | `src/net/HttpServer.cpp` | Localhost HTTP transport and request filtering |
 | `src/Bridge.cpp` | JSON-RPC dispatch |
 | `src/GameThread.cpp` | Runs requests on the game's own thread, also while the game is paused in the background |
-| `src/rpc/*.cpp` | The methods: objects, editor, levels, catalog |
+| `src/rpc/*.cpp` | The methods: objects, editor, levels, catalog, playtest, screenshot |
 
 ## Status
 
-Version 0.1 covers objects: reading, placing, editing, transforming, deleting, selection, undo. Level settings (colours, song, speed, game mode), playtesting and saving from the assistant are not there yet.
+Version 0.2 covers objects (reading, placing, editing, transforming, copying, deleting, selection, undo), automated playtests of classic sections, screenshots, saving and the level's song. Level settings (colours, speed, game mode) and testing platformer movement are not there yet.
 
 The macOS build is tested in the game on Apple Silicon. The Windows build is produced from the same code by CI and has not been verified yet.
 
 ## Credits
 
-Built on the [Geode SDK](https://github.com/geode-sdk/geode). The property table is derived from the community's reverse-engineering work in [geode-sdk/bindings](https://github.com/geode-sdk/bindings).
+Built on the [Geode SDK](https://github.com/geode-sdk/geode). The property table is derived from the community's reverse-engineering work in [geode-sdk/bindings](https://github.com/geode-sdk/bindings). The automated playtest, ASCII map and jump physics come from [GD AI Bridge](https://github.com/RibomX/GD-AI-bridge), saving and the song from [AI Level Connector](https://github.com/oliverja0612-prog/Ai-connector); see [THIRD_PARTY.md](THIRD_PARTY.md).

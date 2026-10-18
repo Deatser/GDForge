@@ -1,14 +1,20 @@
+import { readFile } from "node:fs/promises";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import { type Bridge, BridgeError, type Camera, type EditorInfo, type RawObject, type Status } from "./bridge.js";
 import { categoryNames, lookupObject, searchObjects } from "./catalog.js";
+import { CELL, MAP_LEGEND, type MapObject, renderMap } from "./map.js";
 import { decodeObject, encodeObject, type GDObject, type ObjectPatch, patchSaveString } from "./objects.js";
-import { joinObjects } from "./saveString.js";
+import { runTest } from "./playtest.js";
+import { rgbaToPng } from "./png.js";
+import { REFERENCE } from "./reference.js";
+import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -83,15 +89,24 @@ const newObject = z.object({
   ...appearance,
 });
 
-// Either a list of uids or the user's current selection
+const area = z.object({ x1: z.number(), y1: z.number(), x2: z.number(), y2: z.number() });
+
+// The rectangle as the bridge takes it: [left, bottom, right, top]
+function toRect({ x1, y1, x2, y2 }: z.infer<typeof area>): number[] {
+  return [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)];
+}
+
+// A list of uids, the user's current selection, or everything in an area
 const target = {
   uids: z.array(z.number().int()).optional().describe("uids of the objects to act on"),
   selected: z.boolean().optional().describe("Act on the objects currently selected in the editor instead"),
+  area: area.optional().describe("Act on every object whose centre lies in this rectangle instead, triggers included"),
 };
 
 interface Target {
   uids?: number[] | undefined;
   selected?: boolean | undefined;
+  area?: z.infer<typeof area> | undefined;
 }
 
 export function createServer(bridge: Bridge): McpServer {
@@ -117,10 +132,15 @@ export function createServer(bridge: Bridge): McpServer {
   }
 
   // The objects a tool should act on, as the game currently has them.
-  async function resolveTarget({ uids, selected }: Target): Promise<RawObject[]> {
+  async function resolveTarget({ uids, selected, area }: Target): Promise<RawObject[]> {
     if (selected) return (await fetchObjects({ selected: true, limit: MAX_OBJECTS_PER_CALL + 1 })).objects;
     if (uids && uids.length > 0) return (await fetchObjects({ uids, limit: uids.length })).objects;
-    throw new Error("Pass uids, or selected: true to use the editor's selection.");
+    if (area) {
+      const { total, objects } = await fetchObjects({ rect: toRect(area), limit: MAX_OBJECTS_PER_CALL + 1 });
+      checkBatchSize(total);
+      return objects;
+    }
+    throw new Error("Pass uids, selected: true to use the editor's selection, or an area.");
   }
 
   // The game fades into the editor for about half a second after a level is opened.
@@ -375,6 +395,124 @@ export function createServer(bridge: Bridge): McpServer {
   );
 
   tool(
+    "gd_line",
+    {
+      title: "Place objects along a line",
+      description:
+        "Place the same object along a straight line, e.g. a row of spikes or a diagonal of orbs, as one undo step. " +
+        "x1,y1 and x2,y2 are the centres of the first and last object. Give step (spacing) or count (objects, " +
+        "evenly spaced), not both.",
+      inputSchema: {
+        id: z.number().int().describe("Object ID"),
+        x1: z.number(),
+        y1: z.number(),
+        x2: z.number(),
+        y2: z.number().optional().describe("Default y1, a horizontal line"),
+        step: z.number().positive().optional().describe("Spacing along the line, default 30 (one grid cell)"),
+        count: z.number().int().min(1).optional(),
+        ...appearance,
+        follow: z.boolean().optional(),
+      },
+    },
+    async ({ id, x1, y1, x2, y2 = y1, step, count, follow, ...fields }) => {
+      if (step !== undefined && count !== undefined) throw new Error("Give step or count, not both.");
+      const length = Math.hypot(x2 - x1, y2 - y1);
+      const spacing = step ?? 30;
+      // Rounding absorbs float error so that a length of exactly n steps yields n + 1 objects
+      const total = count ?? Math.floor(length / spacing + 1e-6) + 1;
+      checkBatchSize(total);
+      const objects: GDObject[] = [];
+      for (let i = 0; i < total; i++) {
+        // count spreads the objects from end to end; a step keeps exact spacing and may stop short of x2,y2
+        const along =
+          count !== undefined ? (total === 1 ? 0 : i / (total - 1)) : length === 0 ? 0 : (i * spacing) / length;
+        objects.push({ ...fields, id, x: x1 + (x2 - x1) * along, y: y1 + (y2 - y1) * along } as GDObject);
+      }
+      return place(objects, { follow });
+    },
+  );
+
+  tool(
+    "gd_copy",
+    {
+      title: "Copy objects with an offset",
+      description:
+        "Duplicate objects shifted by dx,dy, as one undo step; times repeats it, each copy shifted by dx,dy further. " +
+        "Good for repeating a pattern. Copies keep every property, groups included, so triggers that target those " +
+        "groups act on the copies too.",
+      inputSchema: {
+        ...target,
+        dx: z.number(),
+        dy: z.number().optional().describe("Default 0"),
+        times: z.number().int().min(1).max(100).optional().describe("Default 1"),
+        follow: z.boolean().optional(),
+      },
+    },
+    async ({ uids, selected, area, dx, dy = 0, times = 1, follow }) => {
+      const objects = await resolveTarget({ uids, selected, area });
+      if (objects.length === 0) return { copied: 0, note: "No matching objects." };
+      checkBatchSize(objects.length * times);
+      const copies: string[] = [];
+      const positions: Array<{ x: number; y: number }> = [];
+      for (let t = 1; t <= times; t++) {
+        for (const [, saveString] of objects) {
+          const { x, y } = decodeObject(saveString);
+          const position = { x: x + dx * t, y: y + dy * t };
+          copies.push(patchSaveString(saveString, position));
+          positions.push(position);
+        }
+      }
+      const { uids: placed } = await bridge.call<{ uids: number[] }>("objects.add", {
+        data: joinObjects(copies),
+        select: false,
+      });
+      if (follow ?? true) await followObjects(positions);
+      return { placed: placed.length, ...describeUids(placed) };
+    },
+  );
+
+  tool(
+    "gd_map",
+    {
+      title: "ASCII map of an area",
+      description:
+        "Draw a level area as text, one character per grid cell, showing only what matters for gameplay " +
+        "(blocks, slopes, hazards, pads, orbs, portals, coins). The cheapest way to see a layout. Default: 60 x 12 " +
+        "cells from x1 = 0, y1 = 0.",
+      inputSchema: {
+        x1: z.number().optional().describe("Left edge, default 0"),
+        y1: z.number().optional().describe("Bottom edge, default 0 (the ground)"),
+        x2: z.number().optional().describe("Right edge, default x1 + 1800 (60 cells)"),
+        y2: z.number().optional().describe("Top edge, default y1 + 360 (12 cells)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ x1 = 0, y1 = 0, x2 = x1 + 60 * CELL, y2 = y1 + 12 * CELL }) => {
+      const columns = Math.ceil((x2 - x1) / CELL);
+      const rows = Math.ceil((y2 - y1) / CELL);
+      if (columns <= 0 || rows <= 0) throw new Error("The area is empty: x2 and y2 must be greater than x1 and y1.");
+      if (columns > 300 || rows > 80) throw new Error("The area is too big: at most 300 x 80 cells.");
+
+      const objects: MapObject[] = [];
+      for (let offset = 0; ; ) {
+        const page = await fetchObjects({ rect: [x1, y1, x2, y2], limit: 2000, offset });
+        for (const [, saveString] of page.objects) {
+          const fields = parseFields(saveString);
+          objects.push({
+            id: Number(fields.get(1)),
+            x: Number(fields.get(2)),
+            y: Number(fields.get(3)),
+            noTouch: fields.get(121) === "1",
+          });
+        }
+        offset += page.objects.length;
+        if (page.objects.length === 0 || offset >= page.total) break;
+      }
+      return { x1, y1, cell: CELL, legend: MAP_LEGEND, map: renderMap(objects, x1, y1, columns, rows) };
+    },
+  );
+
+  tool(
     "gd_edit_objects",
     {
       title: "Change object properties",
@@ -412,9 +550,9 @@ export function createServer(bridge: Bridge): McpServer {
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uids, selected, set, addGroups, removeGroups }) => {
+    async ({ uids, selected, area, set, addGroups, removeGroups }) => {
       const patch = { ...set, addGroups, removeGroups } as ObjectPatch;
-      const objects = await resolveTarget({ uids, selected });
+      const objects = await resolveTarget({ uids, selected, area });
       if (objects.length === 0) return { edited: 0, note: "No matching objects." };
       checkBatchSize(objects.length);
 
@@ -455,8 +593,8 @@ export function createServer(bridge: Bridge): McpServer {
       },
       annotations: { destructiveHint: true },
     },
-    async ({ uids, selected, move, rotate, scale, flipX, flipY, pivot }) => {
-      const objects = await resolveTarget({ uids, selected });
+    async ({ uids, selected, area, move, rotate, scale, flipX, flipY, pivot }) => {
+      const objects = await resolveTarget({ uids, selected, area });
       if (objects.length === 0) return { transformed: 0, note: "No matching objects." };
       return bridge.call("objects.transform", {
         uids: objects.map(([uid]) => uid),
@@ -479,8 +617,8 @@ export function createServer(bridge: Bridge): McpServer {
       inputSchema: target,
       annotations: { destructiveHint: true },
     },
-    async ({ uids, selected }) => {
-      const objects = await resolveTarget({ uids, selected });
+    async ({ uids, selected, area }) => {
+      const objects = await resolveTarget({ uids, selected, area });
       if (objects.length === 0) return { deleted: 0, note: "No matching objects." };
       return bridge.call("objects.delete", { uids: objects.map(([uid]) => uid) });
     },
@@ -523,6 +661,47 @@ export function createServer(bridge: Bridge): McpServer {
       },
     );
   }
+
+  tool(
+    "gd_playtest",
+    {
+      title: "Start or stop the playtest",
+      description: "Start or stop the editor playtest, for the user to watch or play. Objects cannot be changed while it runs.",
+      inputSchema: { action: z.enum(["start", "stop"]) },
+    },
+    async ({ action }) => bridge.call(`playtest.${action}`),
+  );
+
+  tool(
+    "gd_test",
+    {
+      title: "Test the level automatically",
+      description:
+        "Play the level automatically with a planned list of jump presses and get the result: passed, died, " +
+        "stopped (the user stopped the playtest) or timeout, where the run ended, the solid objects next to the " +
+        "player when it died, progress % and the player's path ('x,y;...'). The game presses the button itself at " +
+        "exact player x positions. Use it to check that a section is beatable, then fix the level or the inputs " +
+        "and retry. A cube tap while airborne does nothing: read the path to see where the player lands, and press " +
+        "after landing or from the edge of a block. Classic movement only for now: it presses jump, never left or " +
+        "right, so platformer sections cannot be tested yet. Stops a running playtest first; objects are not changed.",
+      inputSchema: {
+        inputs: z
+          .array(
+            z.object({
+              x: z.number().describe("Player x where the button is pressed"),
+              release: z.number().optional().describe("Player x where it is let go; omit for a tap (one jump)"),
+            }),
+          )
+          .optional()
+          .describe("Button presses in order. Holding works for ship, wave and ufo, and for repeated cube jumps"),
+        untilX: z.number().optional().describe("The run counts as passed at this x. Default: just past the last object"),
+        speed: z.number().min(0.25).max(4).optional().describe("Game speed while testing (default 1)"),
+        timeout: z.number().min(1).max(600).optional().describe("Seconds before giving up (default 120)"),
+        pathStep: z.number().min(5).max(300).optional().describe("Record the path every N units of x (default 30)"),
+      },
+    },
+    async (args) => runTest(bridge, args),
+  );
 
   tool(
     "gd_set_camera",
@@ -612,6 +791,97 @@ export function createServer(bridge: Bridge): McpServer {
       annotations: { readOnlyHint: true },
     },
     async ({ query }) => ({ properties: searchProperties(query) }),
+  );
+
+  tool(
+    "gd_reference",
+    {
+      title: "Common IDs and jump physics",
+      description:
+        "Most used object IDs and measured jump physics for classic play (cube jump height and length per speed, " +
+        "pads, orbs, ship). Read it once before building a playable classic section.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => REFERENCE,
+  );
+
+  tool(
+    "gd_get_level_string",
+    {
+      title: "Read the raw level string",
+      description:
+        "The open level exactly as the game saves it: the settings header (keys kA..., colour channels in kS38) and " +
+        "every object. Large on big levels; to read objects prefer gd_get_objects.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => bridge.call("level.string"),
+  );
+
+  tool(
+    "gd_save_level",
+    {
+      title: "Save the level",
+      description:
+        "Save the open level like the Save button of the editor's pause menu and write it to disk, so the work " +
+        "survives a crash. Stop any playtest first.",
+      inputSchema: {},
+    },
+    async () => bridge.call("level.save"),
+  );
+
+  tool(
+    "gd_set_song",
+    {
+      title: "Set the level's song",
+      description:
+        "Set the open level's custom song by Newgrounds song ID (0 clears it). Save the level afterwards with " +
+        "gd_save_level. Find IDs with gd_find_songs.",
+      inputSchema: { songId: z.number().int().min(0) },
+    },
+    async ({ songId }) => bridge.call("level.song", { songId }),
+  );
+
+  tool(
+    "gd_find_songs",
+    {
+      title: "Find songs",
+      description:
+        "Search the audio files the game already has by file name (downloaded Newgrounds songs are named " +
+        "<song ID>.mp3) and get a Newgrounds search link for finding new ones.",
+      inputSchema: {
+        query: z.string().max(120).optional().describe("Part of the file name; empty lists everything"),
+        limit: z.number().int().min(1).max(100).optional().describe("Default 20"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ query = "", limit }) => ({
+      ...(await bridge.call<Json>("songs.local", { query, limit })),
+      ...(query ? { newgroundsSearch: `https://www.newgrounds.com/search/conduct/audio?terms=${encodeURIComponent(query)}` } : {}),
+    }),
+  );
+
+  server.registerTool(
+    "gd_screenshot",
+    {
+      title: "Screenshot of the game",
+      description:
+        "A picture of what the game shows right now, e.g. to check how decoration looks. Works while the game " +
+        "window is covered or in the background. Move the view first with gd_set_camera.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      try {
+        const { path, width, height } = await bridge.call<{ path: string; width: number; height: number }>("screenshot");
+        // Keep the picture around 1280 wide: plenty to judge a level, and much cheaper to read
+        const png = rgbaToPng(await readFile(path), width, height, Math.max(1, Math.round(width / 1280)));
+        return { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }] };
+      } catch (error) {
+        return failure(error);
+      }
+    },
   );
 
   return server;

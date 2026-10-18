@@ -189,7 +189,7 @@ export function decodeObject(saveString: string, uid?: number): GDObject {
         object.editorLayer2 = Number(raw);
         break;
       default: {
-        const property = schema.forKey(key);
+        const property = typeof key === "number" ? schema.forKey(key) : undefined;
         if (property) props[property.name] = decodeValue(property, raw);
         else props[String(key)] = raw;
       }
