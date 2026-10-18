@@ -6,6 +6,14 @@ import { z } from "zod";
 
 import { type Bridge, BridgeError, type Camera, type EditorInfo, type RawObject, type Status } from "./bridge.js";
 import { categoryNames, lookupObject, searchObjects } from "./catalog.js";
+import {
+  decodeSettings,
+  encodeSettings,
+  MODES,
+  type RawSettings,
+  SETTABLE_CHANNELS,
+  SPEEDS,
+} from "./levelSettings.js";
 import { CELL, MAP_LEGEND, type MapObject, renderMap } from "./map.js";
 import { decodeObject, encodeObject, type GDObject, type ObjectPatch, patchSaveString } from "./objects.js";
 import { runTest } from "./playtest.js";
@@ -14,7 +22,7 @@ import { REFERENCE } from "./reference.js";
 import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -836,11 +844,92 @@ export function createServer(bridge: Bridge): McpServer {
     {
       title: "Set the level's song",
       description:
-        "Set the open level's custom song by Newgrounds song ID (0 clears it). Save the level afterwards with " +
-        "gd_save_level. Find IDs with gd_find_songs.",
-      inputSchema: { songId: z.number().int().min(0) },
+        "Set the open level's song: a custom one by Newgrounds song ID (0 clears it), or one of the game's own " +
+        "songs by track number (the Normal tab: 0 is Stereo Madness, then the main levels in order). Pass one of " +
+        "the two. Save the level afterwards with gd_save_level. Find custom song IDs with gd_find_songs.",
+      inputSchema: {
+        songId: z.number().int().min(0).optional(),
+        track: z.number().int().min(0).optional().describe("The game's own song"),
+      },
     },
-    async ({ songId }) => bridge.call("level.song", { songId }),
+    async ({ songId, track }) => {
+      if ((songId === undefined) === (track === undefined)) throw new Error("Pass songId or track, not both.");
+      return bridge.call("level.song", track === undefined ? { songId } : { track });
+    },
+  );
+
+  tool(
+    "gd_get_level_settings",
+    {
+      title: "Read the level settings",
+      description:
+        "The open level's settings, as in the editor's gear button: start speed and mode, game type, options, " +
+        "spawn group, background, ground, middleground and font, the song's offset and fades, and the start " +
+        "colours of the colour channels.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => decodeSettings(await bridge.call<RawSettings>("level.settings")),
+  );
+
+  const startColor = z.object({
+    channel: z
+      .union([z.number().int(), z.string()])
+      .describe(`1-999, or ${Object.keys(SETTABLE_CHANNELS).join(", ")}`),
+    hex: z.string().optional().describe('RRGGBB, e.g. "#287DFF"; or give r, g, b'),
+    r: z.number().int().min(0).max(255).optional(),
+    g: z.number().int().min(0).max(255).optional(),
+    b: z.number().int().min(0).max(255).optional(),
+    opacity: z.number().min(0).max(1).optional(),
+    blending: z.boolean().optional(),
+    playerColor: z.enum(["none", "P1", "P2"]).optional().describe("Follow a player's colour"),
+    copyColor: z.number().int().min(0).optional().describe("Copy another channel (0 stops copying)"),
+    copyOpacity: z.boolean().optional(),
+    hsv: z
+      .object({
+        h: z.number().min(-180).max(180),
+        s: z.number(),
+        v: z.number(),
+        absoluteSaturation: z.boolean().optional(),
+        absoluteBrightness: z.boolean().optional(),
+      })
+      .optional()
+      .describe("HSV shift applied to the copied colour"),
+  });
+
+  tool(
+    "gd_set_level_settings",
+    {
+      title: "Change the level settings",
+      description:
+        "Change the open level's settings, like the editor's gear button. Only the fields given change. " +
+        "colors sets the start colour of channels (what Select Color sets), not a colour trigger. Save the level " +
+        "afterwards with gd_save_level.",
+      inputSchema: {
+        speed: z.enum(SPEEDS).optional().describe("Start speed"),
+        mode: z.enum(MODES).optional().describe("Start game mode"),
+        gameType: z.enum(["classic", "platformer"]).optional(),
+        mini: z.boolean().optional(),
+        dual: z.boolean().optional(),
+        twoPlayer: z.boolean().optional(),
+        mirror: z.boolean().optional(),
+        flipGravity: z.boolean().optional(),
+        rotateGameplay: z.boolean().optional(),
+        reverseGameplay: z.boolean().optional(),
+        noTimePenalty: z.boolean().optional().describe("Platformer"),
+        spawnGroup: z.number().int().min(0).max(9999).optional().describe("Group spawned when the level starts, 0 none"),
+        background: z.number().int().min(0).max(59).optional().describe("Background art 1-59"),
+        ground: z.number().int().min(0).max(22).optional().describe("Ground art 1-22"),
+        middleground: z.number().int().min(0).max(3).optional().describe("Middleground art 1-3, 0 none"),
+        font: z.number().int().min(0).max(59).optional().describe("0 is the default font"),
+        songOffset: z.number().min(0).optional().describe("Seconds into the song where the level starts"),
+        fadeIn: z.boolean().optional(),
+        fadeOut: z.boolean().optional(),
+        dontReset: z.boolean().optional().describe("Keep the song playing on death"),
+        colors: z.array(startColor).max(1100).optional(),
+      },
+    },
+    async (args) => decodeSettings(await bridge.call<RawSettings>("level.settings.set", encodeSettings(args))),
   );
 
   tool(

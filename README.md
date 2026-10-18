@@ -87,8 +87,9 @@ Changes are not saved until you save in the editor, exactly as with your own edi
 | `gd_playtest`, `gd_test` | Start or stop the playtest; play the level automatically with planned jumps and report where the player died |
 | `gd_screenshot` | Picture of what the game shows |
 | `gd_save_level` | Save the open level and write it to disk |
+| `gd_get_level_settings`, `gd_set_level_settings` | Read and change the level settings: start speed and mode, game type, options, art, font, song offset and fades, start colours |
 | `gd_get_level_string` | The open level as the game saves it, settings included |
-| `gd_set_song`, `gd_find_songs` | Set the level's Newgrounds song; find songs the game already has |
+| `gd_set_song`, `gd_find_songs` | Set the level's song (Newgrounds ID or one of the game's own); find songs the game already has |
 | `gd_reference` | Common object IDs and measured jump physics for classic play |
 | `gd_search_objects` | Find object IDs by name, category or type; works without the game |
 | `gd_describe_object` | What an object ID is and which properties it accepts |

@@ -88,15 +88,163 @@ namespace gdforge::rpc {
             return Ok(matjson::makeObject({ { "saved", std::string(editor.layer->m_level->m_levelName) } }));
         }
 
-        // Sets the open level's custom song (a Newgrounds ID). Takes effect in the level once it is saved.
+        // Sets the open level's song: a custom one by Newgrounds ID, or one of the
+        // game's own ("track", the Normal tab). Takes effect in the level once it is saved.
         RpcResult song(matjson::Value const& params) {
             GEODE_UNWRAP_INTO(auto editor, requireEditable());
+            auto level = editor.layer->m_level;
+            if (auto track = optInt(params["track"])) {
+                auto title = *track >= 0 ? std::string(LevelTools::getAudioTitle(*track)) : "";
+                if (title.empty() || title == "Unknown") {
+                    return fail("bad_params", "The game has no song with that track number");
+                }
+                level->m_songID = 0;
+                level->m_audioTrack = *track;
+                return Ok(matjson::makeObject({ { "track", *track }, { "title", title } }));
+            }
             auto id = optInt(params["songId"]);
             if (!id || *id < 0) {
                 return fail("bad_params", "Pass \"songId\": a Newgrounds song ID, or 0 to clear the custom song");
             }
-            editor.layer->m_level->m_songID = *id;
+            level->m_songID = *id;
             return Ok(matjson::makeObject({ { "songId", *id } }));
+        }
+
+        // The level settings of the gear button: start speed and mode, game
+        // type, options, art, font and the song's offset and fades. Colour
+        // channels are in the "kS38" part of saveString, as the game saves them.
+        matjson::Value settingsJson(LevelSettingsObject* settings) {
+            return matjson::makeObject({
+                { "speed", static_cast<int>(settings->m_startSpeed) },
+                { "mode", settings->m_startMode },
+                { "platformer", settings->m_platformerMode },
+                { "mini", settings->m_startMini },
+                { "dual", settings->m_startDual },
+                { "twoPlayer", settings->m_twoPlayerMode },
+                { "mirror", settings->m_mirrorMode },
+                { "flipGravity", settings->m_isFlipped },
+                { "rotateGameplay", settings->m_rotateGameplay },
+                { "reverseGameplay", settings->m_reverseGameplay },
+                { "noTimePenalty", settings->m_noTimePenalty },
+                { "spawnGroup", settings->m_spawnGroup },
+                { "background", settings->m_backgroundIndex },
+                { "ground", settings->m_groundIndex },
+                { "middleground", settings->m_middleGroundIndex },
+                { "font", settings->m_fontIndex },
+                { "songOffset", settings->m_songOffset },
+                { "fadeIn", settings->m_fadeIn },
+                { "fadeOut", settings->m_fadeOut },
+                { "dontReset", settings->m_dontReset },
+                { "saveString", std::string(settings->getSaveString()) },
+            });
+        }
+
+        RpcResult getSettings(matjson::Value const&) {
+            GEODE_UNWRAP_INTO(auto editor, requireEditor());
+            return Ok(settingsJson(editor.layer->m_levelSettings));
+        }
+
+        // Changes the given level settings and start colours, then lets the
+        // editor apply them the way it does when its settings window closes
+        // (MultiplayerEdit by xXoanon applies synced settings the same way).
+        RpcResult setSettings(matjson::Value const& params) {
+            GEODE_UNWRAP_INTO(auto editor, requireEditable());
+            auto settings = editor.layer->m_levelSettings;
+            auto effects = settings->m_effectManager;
+
+            // Check everything first, so a bad value changes nothing. Out of range
+            // art or font numbers would make the game load textures that do not exist.
+            struct Range { char const* key; int min; int max; };
+            for (auto const& [key, min, max] : {
+                     Range { "speed", 0, 4 }, Range { "mode", 0, 7 }, Range { "spawnGroup", 0, 9999 },
+                     Range { "background", 0, 59 }, Range { "ground", 0, 22 }, Range { "middleground", 0, 3 },
+                     Range { "font", 0, 59 },
+                 }) {
+                if (params[key].isNull()) continue;
+                auto value = optInt(params[key]);
+                if (!value || *value < min || *value > max) {
+                    return fail("bad_params", fmt::format("\"{}\" must be a whole number from {} to {}", key, min, max));
+                }
+            }
+            std::vector<std::pair<ColorAction*, matjson::Value>> colors;
+            if (params["colors"].isArray()) {
+                for (auto const& color : params["colors"]) {
+                    auto channel = optInt(color["channel"]);
+                    if (!channel || *channel < 1 || *channel > 1101) {
+                        return fail("bad_params", "Each colour needs \"channel\": a colour channel ID");
+                    }
+                    auto action = effects->getColorAction(*channel);
+                    if (!action) return fail("bad_params", fmt::format("Colour channel {} cannot be set", *channel));
+                    colors.emplace_back(action, color);
+                }
+            }
+
+            auto setInt = [&](char const* key, int& field) {
+                if (auto value = optInt(params[key])) field = *value;
+            };
+            auto setBool = [&](char const* key, bool& field) {
+                if (params[key].isBool()) field = params[key].asBool().unwrap();
+            };
+            if (auto speed = optInt(params["speed"])) settings->m_startSpeed = static_cast<Speed>(*speed);
+            setInt("mode", settings->m_startMode);
+            setBool("platformer", settings->m_platformerMode);
+            setBool("mini", settings->m_startMini);
+            setBool("dual", settings->m_startDual);
+            setBool("twoPlayer", settings->m_twoPlayerMode);
+            setBool("mirror", settings->m_mirrorMode);
+            setBool("flipGravity", settings->m_isFlipped);
+            setBool("rotateGameplay", settings->m_rotateGameplay);
+            setBool("reverseGameplay", settings->m_reverseGameplay);
+            setBool("noTimePenalty", settings->m_noTimePenalty);
+            setInt("spawnGroup", settings->m_spawnGroup);
+            setInt("background", settings->m_backgroundIndex);
+            setInt("ground", settings->m_groundIndex);
+            setInt("middleground", settings->m_middleGroundIndex);
+            setInt("font", settings->m_fontIndex);
+            if (auto offset = optNumber(params["songOffset"])) settings->m_songOffset = static_cast<float>(*offset);
+            setBool("fadeIn", settings->m_fadeIn);
+            setBool("fadeOut", settings->m_fadeOut);
+            setBool("dontReset", settings->m_dontReset);
+
+            for (auto const& entry : colors) {
+                auto action = entry.first;
+                auto const& color = entry.second;
+                auto component = [&](char const* key, GLubyte current) {
+                    auto value = optInt(color[key]);
+                    return value ? static_cast<GLubyte>(std::clamp(*value, 0, 255)) : current;
+                };
+                ccColor3B rgb = {
+                    component("r", action->m_fromColor.r),
+                    component("g", action->m_fromColor.g),
+                    component("b", action->m_fromColor.b),
+                };
+                action->m_color = action->m_fromColor = action->m_toColor = rgb;
+                if (auto opacity = optNumber(color["opacity"])) {
+                    auto value = std::clamp(static_cast<float>(*opacity), 0.f, 1.f);
+                    action->m_currentOpacity = action->m_fromOpacity = action->m_toOpacity = value;
+                }
+                if (color["blending"].isBool()) action->m_blending = color["blending"].asBool().unwrap();
+                if (auto player = optInt(color["playerColor"])) action->m_playerColor = *player;
+                if (auto copy = optInt(color["copyColor"])) action->m_copyID = *copy;
+                if (color["copyOpacity"].isBool()) action->m_copyOpacity = color["copyOpacity"].asBool().unwrap();
+                auto const& hsv = color["hsv"];
+                if (hsv.isObject()) {
+                    action->m_copyHSV = cchsv(
+                        static_cast<float>(optNumber(hsv["h"]).value_or(0.0)),
+                        static_cast<float>(optNumber(hsv["s"]).value_or(1.0)),
+                        static_cast<float>(optNumber(hsv["v"]).value_or(1.0)),
+                        flag(hsv["absoluteSaturation"], false),
+                        flag(hsv["absoluteBrightness"], false)
+                    );
+                }
+                effects->colorActionChanged(action);
+                if (action->m_colorSprite) effects->updateColorAction(action);
+            }
+
+            editor.layer->m_updateColorSprites = true;
+            editor.layer->updateOptions();
+            editor.layer->levelSettingsUpdated();
+            return Ok(settingsJson(settings));
         }
 
         // Audio files the game has, downloaded songs first. Songs downloaded from
@@ -142,6 +290,8 @@ namespace gdforge::rpc {
         registry["level.string"] = levelString;
         registry["level.save"] = save;
         registry["level.song"] = song;
+        registry["level.settings"] = getSettings;
+        registry["level.settings.set"] = setSettings;
         registry["songs.local"] = localSongs;
     }
 
