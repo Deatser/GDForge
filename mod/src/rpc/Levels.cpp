@@ -41,6 +41,10 @@ namespace gdforge::rpc {
             if (typeinfo_cast<CCTransitionScene*>(director->getRunningScene())) {
                 return fail("busy", "The game is switching screens. Try again in a moment.");
             }
+            // Leaving the loading screen early stops the game loading its textures for the whole session
+            if (auto scene = director->getRunningScene(); scene && scene->getChildByType<LoadingLayer>(0)) {
+                return fail("busy", "The game is still loading. Try again once the main menu shows.");
+            }
 
             GJGameLevel* level = nullptr;
             if (flag(params["scratch"], false)) {
@@ -110,10 +114,29 @@ namespace gdforge::rpc {
             return Ok(matjson::makeObject({ { "songId", *id } }));
         }
 
+        // Legacy Options (the gear inside Options): switches for fixes of old game bugs
+        std::pair<char const*, bool LevelSettingsObject::*> const LEGACY_OPTIONS[] = {
+            { "allowMultiRotation", &LevelSettingsObject::m_allowMultiRotation },
+            { "enablePlayerSqueeze", &LevelSettingsObject::m_enablePlayerSqueeze },
+            { "fixGravityBug", &LevelSettingsObject::m_fixGravityBug },
+            { "fixNegativeScale", &LevelSettingsObject::m_fixNegativeScale },
+            { "fixRobotJump", &LevelSettingsObject::m_fixRobotJump },
+            { "dynamicLevelHeight", &LevelSettingsObject::m_dynamicLevelHeight },
+            { "sortGroups", &LevelSettingsObject::m_sortGroups },
+            { "fixRadiusCollision", &LevelSettingsObject::m_fixRadiusCollision },
+            { "enable22Changes", &LevelSettingsObject::m_enable22Changes },
+            { "allowStaticRotate", &LevelSettingsObject::m_allowStaticRotate },
+            { "reverseSync", &LevelSettingsObject::m_reverseSync },
+            { "decreaseBoostSlide", &LevelSettingsObject::m_decreaseBoostSlide },
+            { "enableImpulseFix", &LevelSettingsObject::m_enableImpulseFix },
+        };
+
         // The level settings of the gear button: start speed and mode, game
         // type, options, art, font and the song's offset and fades. Colour
         // channels are in the "kS38" part of saveString, as the game saves them.
         matjson::Value settingsJson(LevelSettingsObject* settings) {
+            auto legacy = matjson::Value::object();
+            for (auto const& [key, member] : LEGACY_OPTIONS) legacy[key] = settings->*member;
             return matjson::makeObject({
                 { "speed", static_cast<int>(settings->m_startSpeed) },
                 { "mode", settings->m_startMode },
@@ -135,6 +158,7 @@ namespace gdforge::rpc {
                 { "fadeIn", settings->m_fadeIn },
                 { "fadeOut", settings->m_fadeOut },
                 { "dontReset", settings->m_dontReset },
+                { "legacy", std::move(legacy) },
                 { "saveString", std::string(settings->getSaveString()) },
             });
         }
@@ -205,6 +229,11 @@ namespace gdforge::rpc {
             setBool("fadeIn", settings->m_fadeIn);
             setBool("fadeOut", settings->m_fadeOut);
             setBool("dontReset", settings->m_dontReset);
+            if (auto const& legacy = params["legacy"]; legacy.isObject()) {
+                for (auto const& [key, member] : LEGACY_OPTIONS) {
+                    if (legacy[key].isBool()) settings->*member = legacy[key].asBool().unwrap();
+                }
+            }
 
             for (auto const& entry : colors) {
                 auto action = entry.first;

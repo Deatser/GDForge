@@ -22,7 +22,7 @@ import { REFERENCE } from "./reference.js";
 import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -926,6 +926,24 @@ export function createServer(bridge: Bridge): McpServer {
         fadeIn: z.boolean().optional(),
         fadeOut: z.boolean().optional(),
         dontReset: z.boolean().optional().describe("Keep the song playing on death"),
+        legacy: z
+          .object({
+            allowMultiRotation: z.boolean().optional(),
+            enablePlayerSqueeze: z.boolean().optional(),
+            fixGravityBug: z.boolean().optional(),
+            fixNegativeScale: z.boolean().optional(),
+            fixRobotJump: z.boolean().optional(),
+            dynamicLevelHeight: z.boolean().optional(),
+            sortGroups: z.boolean().optional(),
+            fixRadiusCollision: z.boolean().optional(),
+            enable22Changes: z.boolean().optional(),
+            allowStaticRotate: z.boolean().optional(),
+            reverseSync: z.boolean().optional(),
+            decreaseBoostSlide: z.boolean().optional(),
+            enableImpulseFix: z.boolean().optional(),
+          })
+          .optional()
+          .describe("Legacy Options: fixes of old game bugs. New levels keep the defaults"),
         colors: z.array(startColor).max(1100).optional(),
       },
     },
