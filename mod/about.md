@@ -1,0 +1,1 @@
+Lets an AI assistant (Claude Code or any MCP client) build in the level editor: objects, triggers, level settings, saving, screenshots and automatic playtests. Works through a local server on 127.0.0.1 and the GD Forge MCP server.
