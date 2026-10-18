@@ -5,7 +5,7 @@
 #include <memory>
 #include <thread>
 
-namespace gdbuilder::net {
+namespace gdforge::net {
 
     namespace {
         constexpr auto JSON = "application/json";
@@ -24,14 +24,14 @@ namespace gdbuilder::net {
 
         bool isTrusted(httplib::Request const& req) {
             return !req.has_header("Origin")
-                && req.get_header_value("X-GDBuilder") == "1"
+                && req.get_header_value("X-GDForge") == "1"
                 && isLocalHost(req.get_header_value("Host"));
         }
 
         void reject(httplib::Response& res) {
             res.status = 403;
             res.set_content(
-                R"({"ok":false,"error":{"code":"forbidden","message":"Only the local GDBuilder MCP server may use this endpoint"}})",
+                R"({"ok":false,"error":{"code":"forbidden","message":"Only the local GD Forge MCP server may use this endpoint"}})",
                 JSON
             );
         }

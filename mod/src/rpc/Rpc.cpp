@@ -4,7 +4,7 @@
 
 using namespace geode::prelude;
 
-namespace gdbuilder::rpc {
+namespace gdforge::rpc {
 
     geode::Result<Editor, RpcError> requireEditor() {
         auto layer = LevelEditorLayer::get();

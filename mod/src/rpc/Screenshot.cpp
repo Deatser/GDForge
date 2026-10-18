@@ -8,7 +8,7 @@
 
 using namespace geode::prelude;
 
-namespace gdbuilder::rpc {
+namespace gdforge::rpc {
 
     namespace {
         RpcResult screenshot(matjson::Value const&) {

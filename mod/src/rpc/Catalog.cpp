@@ -5,7 +5,7 @@
 
 using namespace geode::prelude;
 
-namespace gdbuilder::rpc {
+namespace gdforge::rpc {
 
     namespace {
         // Highest object ID to probe. IDs are sparse; 2.2081 tops out below 5000.

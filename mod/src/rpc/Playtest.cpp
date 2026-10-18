@@ -15,7 +15,7 @@
 
 using namespace geode::prelude;
 
-namespace gdbuilder::rpc {
+namespace gdforge::rpc {
 
     namespace {
         struct Input {
@@ -225,17 +225,17 @@ namespace gdbuilder::rpc {
 // Runs every physics step of a playtest
 class $modify(GJBaseGameLayer) {
     void processCommands(float dt, bool isHalfTick, bool isLastTick) {
-        gdbuilder::rpc::beforeStep(this);
+        gdforge::rpc::beforeStep(this);
         GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
-        gdbuilder::rpc::afterStep(this);
+        gdforge::rpc::afterStep(this);
     }
 };
 
 class $modify(PlayerObject) {
     void playerDestroyed(bool noEffects) {
         auto layer = LevelEditorLayer::get();
-        if (gdbuilder::rpc::s_run.active && layer && static_cast<PlayerObject*>(this) == layer->m_player1) {
-            gdbuilder::rpc::finish("died", this->getPosition());
+        if (gdforge::rpc::s_run.active && layer && static_cast<PlayerObject*>(this) == layer->m_player1) {
+            gdforge::rpc::finish("died", this->getPosition());
         }
         PlayerObject::playerDestroyed(noEffects);
     }

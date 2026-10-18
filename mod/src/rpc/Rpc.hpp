@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-namespace gdbuilder::rpc {
+namespace gdforge::rpc {
 
     void registerStatus(RpcRegistry& registry);
     void registerEditor(RpcRegistry& registry);

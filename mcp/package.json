@@ -1,10 +1,10 @@
 {
-  "name": "gdbuilder-mcp",
+  "name": "gdforge-mcp",
   "version": "0.2.0",
   "description": "MCP server that lets AI assistants build in the Geometry Dash level editor",
   "type": "module",
   "bin": {
-    "gdbuilder-mcp": "dist/index.js"
+    "gdforge-mcp": "dist/index.js"
   },
   "files": [
     "dist",

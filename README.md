@@ -1,4 +1,4 @@
-# GDBuilder AI
+# GD Forge
 
 Lets an AI assistant build inside the real Geometry Dash level editor. You describe what you want in your AI client; objects appear in the editor you already know, as if you had placed them yourself, and every change lands in the editor's own undo history.
 
@@ -7,7 +7,7 @@ It works with any assistant that supports the [Model Context Protocol](https://m
 ## How it works
 
 ```
-AI client  ──MCP (stdio)──▶  gdbuilder-mcp  ──HTTP on 127.0.0.1──▶  GDBuilder AI mod  ──▶  level editor
+AI client  ──MCP (stdio)──▶  gdforge-mcp  ──HTTP on 127.0.0.1──▶  GD Forge mod  ──▶  level editor
               mcp/                                                   mod/ (Geode)
 ```
 
@@ -25,7 +25,7 @@ There is no separate editor and no in-game chat. The AI works on the level; you 
 ## Install
 
 1. **Install Geode** with its installer and start the game once.
-2. **Install the mod.** Download `talha.gdbuilder-ai.geode` from this repository's releases and put it in Geode's `mods` folder (in the game: Geode button → settings → *Open Mods Folder*). Restart the game.
+2. **Install the mod.** Download `gdforge.editor.geode` from this repository's releases and put it in Geode's `mods` folder (in the game: Geode button → settings → *Open Mods Folder*). Restart the game.
 3. **Build the MCP server** (until it is published to npm):
    ```bash
    cd mcp
@@ -36,21 +36,21 @@ There is no separate editor and no in-game chat. The AI works on the level; you 
 
    Claude Code:
    ```bash
-   claude mcp add gdbuilder -- node /absolute/path/to/GDBuilderAI/mcp/dist/index.js
+   claude mcp add gdforge -- node /absolute/path/to/GDForge/mcp/dist/index.js
    ```
    Clients configured with JSON (Claude Desktop, Cursor, ...):
    ```json
    {
      "mcpServers": {
-       "gdbuilder": {
+       "gdforge": {
          "command": "node",
-         "args": ["/absolute/path/to/GDBuilderAI/mcp/dist/index.js"]
+         "args": ["/absolute/path/to/GDForge/mcp/dist/index.js"]
        }
      }
    }
    ```
 
-The bridge listens on port 47821. To change it, set the port in the mod's settings in the game and set the `GDBUILDER_PORT` environment variable for the MCP server to the same value.
+The bridge listens on port 47821. To change it, set the port in the mod's settings in the game and set the `GDFORGE_PORT` environment variable for the MCP server to the same value.
 
 ## Using it
 
@@ -149,4 +149,4 @@ The macOS build is tested in the game on Apple Silicon. The Windows build is pro
 
 ## Credits
 
-Built on the [Geode SDK](https://github.com/geode-sdk/geode). The property table is derived from the community's reverse-engineering work in [geode-sdk/bindings](https://github.com/geode-sdk/bindings). The automated playtest, ASCII map and jump physics come from [GD AI Bridge](https://github.com/RibomX/GD-AI-bridge), saving and the song from [AI Level Connector](https://github.com/oliverja0612-prog/Ai-connector); see [THIRD_PARTY.md](THIRD_PARTY.md).
+GD Forge is a personal fork of [GDBuilder AI](https://github.com/TalhaMudo/GDBuilderAI) by TalhaMudo. Built on the [Geode SDK](https://github.com/geode-sdk/geode). The property table is derived from the community's reverse-engineering work in [geode-sdk/bindings](https://github.com/geode-sdk/bindings). The automated playtest, ASCII map and jump physics come from [GD AI Bridge](https://github.com/RibomX/GD-AI-bridge), saving and the song from [AI Level Connector](https://github.com/oliverja0612-prog/Ai-connector); see [THIRD_PARTY.md](THIRD_PARTY.md).

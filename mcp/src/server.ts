@@ -20,7 +20,7 @@ const VERSION = "0.2.0";
 // call from flooding a level, and the request small enough to stay responsive.
 const MAX_OBJECTS_PER_CALL = 5000;
 
-const INSTRUCTIONS = `GDBuilder controls the Geometry Dash level editor running on the user's computer. Every change shows up in the game immediately and is recorded in the editor's own undo history.
+const INSTRUCTIONS = `GD Forge controls the Geometry Dash level editor running on the user's computer. Every change shows up in the game immediately and is recorded in the editor's own undo history.
 
 Start with gd_status. A level must be open in the editor for the other editing tools to work.
 
@@ -110,7 +110,7 @@ interface Target {
 }
 
 export function createServer(bridge: Bridge): McpServer {
-  const server = new McpServer({ name: "gdbuilder", version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "gdforge", version: VERSION }, { instructions: INSTRUCTIONS });
 
   // Registers a tool whose handler returns plain data and may throw.
   function tool<Shape extends z.ZodRawShape>(

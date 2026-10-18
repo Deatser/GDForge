@@ -8,7 +8,7 @@
 
 using namespace geode::prelude;
 
-namespace gdbuilder {
+namespace gdforge {
 
     namespace {
         RpcRegistry const& registry() {

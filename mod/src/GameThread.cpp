@@ -11,7 +11,7 @@
 
 using namespace geode::prelude;
 
-namespace gdbuilder {
+namespace gdforge {
 
     namespace {
         std::mutex s_mutex;
@@ -58,7 +58,7 @@ namespace gdbuilder {
 // relies on) is not being updated.
 class $modify(CCDisplayLinkDirector) {
     void mainLoop() {
-        gdbuilder::drain(this);
+        gdforge::drain(this);
         CCDisplayLinkDirector::mainLoop();
     }
 };
@@ -66,11 +66,11 @@ class $modify(CCDisplayLinkDirector) {
 class $modify(AppDelegate) {
     void applicationDidEnterBackground() {
         AppDelegate::applicationDidEnterBackground();
-        gdbuilder::s_backgrounded = true;
+        gdforge::s_backgrounded = true;
     }
 
     void applicationWillEnterForeground() {
-        gdbuilder::s_backgrounded = false;
+        gdforge::s_backgrounded = false;
         AppDelegate::applicationWillEnterForeground();
     }
 };

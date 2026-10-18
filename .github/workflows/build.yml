@@ -42,7 +42,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: GDBuilder AI mod
+          name: GD Forge mod
           path: ${{ steps.build.outputs.build-output }}
 
   mcp:

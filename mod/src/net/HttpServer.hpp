@@ -5,7 +5,7 @@
 
 // Deliberately free of Geode and cocos headers: HttpServer.cpp has to include
 // the socket headers before anything that drags in windows.h.
-namespace gdbuilder::net {
+namespace gdforge::net {
 
     struct Reply {
         int status = 200;

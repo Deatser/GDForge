@@ -6,7 +6,7 @@
 // default layering). Regenerate after a game update:
 //
 //   1. open any level in the editor (the build tabs only exist there)
-//   2. curl -s -X POST http://127.0.0.1:47821/rpc -H 'X-GDBuilder: 1' \
+//   2. curl -s -X POST http://127.0.0.1:47821/rpc -H 'X-GDForge: 1' \
 //        -d '{"method":"catalog.dump"}' > dump.json
 //   3. node scripts/gen-catalog.mjs dump.json
 import { readFileSync, writeFileSync } from "node:fs";

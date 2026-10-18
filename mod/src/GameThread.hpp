@@ -2,7 +2,7 @@
 
 #include <functional>
 
-namespace gdbuilder {
+namespace gdforge {
 
     // Runs func on the thread that runs the game loop, the only thread that
     // may touch cocos and game state. (On macOS that is a display-link thread,

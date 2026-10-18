@@ -1,4 +1,4 @@
-// Client for the HTTP bridge the GDBuilder AI mod opens inside Geometry Dash.
+// Client for the HTTP bridge the GD Forge mod opens inside Geometry Dash.
 
 export const DEFAULT_PORT = 47821;
 
@@ -30,7 +30,7 @@ export class Bridge {
       response = await fetch(this.url, {
         method: "POST",
         // The mod only accepts requests carrying this header
-        headers: { "Content-Type": "application/json", "X-GDBuilder": "1" },
+        headers: { "Content-Type": "application/json", "X-GDForge": "1" },
         body: JSON.stringify({ method, params }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
@@ -40,8 +40,8 @@ export class Bridge {
       }
       throw new BridgeError(
         "not_running",
-        "Cannot reach Geometry Dash. Make sure the game is running with Geode and the GDBuilder AI mod " +
-          "installed and enabled, and that the mod's port setting matches GDBUILDER_PORT.",
+        "Cannot reach Geometry Dash. Make sure the game is running with Geode and the GD Forge mod " +
+          "installed and enabled, and that the mod's port setting matches GDFORGE_PORT.",
       );
     }
 
@@ -52,7 +52,7 @@ export class Bridge {
       throw new BridgeError(
         "bad_reply",
         `Unexpected reply from port ${new URL(this.url).port} (HTTP ${response.status}). ` +
-          "Another program may be using the port; change it in the mod settings and GDBUILDER_PORT.",
+          "Another program may be using the port; change it in the mod settings and GDFORGE_PORT.",
       );
     }
     if (!reply.ok) throw new BridgeError(reply.error.code, reply.error.message);

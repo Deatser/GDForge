@@ -17,7 +17,7 @@ using namespace geode::prelude;
 // EditorUI::pasteObjects. That keeps the mod agnostic of individual
 // properties: anything the game can save, the MCP server can read and write.
 
-namespace gdbuilder::rpc {
+namespace gdforge::rpc {
 
     namespace {
         using ObjectIndex = std::unordered_map<int, GameObject*>;

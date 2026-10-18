@@ -13,7 +13,7 @@ $on_mod(Loaded) {
     }
 
     auto port = static_cast<int>(mod->getSettingValue<int64_t>("port"));
-    auto error = gdbuilder::net::startServer(port, gdbuilder::handleRequest);
+    auto error = gdforge::net::startServer(port, gdforge::handleRequest);
     if (error.empty()) {
         log::info("Bridge listening on 127.0.0.1:{}", port);
     }

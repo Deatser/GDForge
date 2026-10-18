@@ -8,7 +8,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace gdbuilder {
+namespace gdforge {
 
     struct RpcError {
         std::string code;
