@@ -61,10 +61,10 @@ namespace gdforge::rpc {
             return out;
         }
 
-        // The scene's layers from the bottom one to the one drawn on top.
-        std::vector<CCNode*> sceneLayers(CCScene* scene) {
+        // The visible layers directly under a node, from the bottom one to the one drawn on top.
+        std::vector<CCNode*> layersOf(CCNode* parent) {
             std::vector<CCNode*> layers;
-            if (auto children = scene->getChildren()) {
+            if (auto children = parent->getChildren()) {
                 for (auto child : CCArrayExt<CCNode*>(children)) {
                     if (child->isVisible() && typeinfo_cast<CCLayer*>(child)) layers.push_back(child);
                 }
@@ -77,16 +77,24 @@ namespace gdforge::rpc {
         }
 
         // The layer a player would be using: the topmost popup or menu, or the
-        // editor's interface when nothing covers it.
+        // editor with its controls when nothing covers it.
         geode::Result<CCNode*, RpcError> topLayer() {
             auto scene = CCDirector::get()->getRunningScene();
             if (!scene || typeinfo_cast<CCTransitionScene*>(scene)) {
                 return fail("busy", "The game is switching screens. Try again in a moment.");
             }
-            auto layers = sceneLayers(scene);
+            auto layers = layersOf(scene);
             if (layers.empty()) return fail("busy", "Nothing is on screen yet. Try again in a moment.");
             auto top = layers.back();
-            if (auto editor = typeinfo_cast<LevelEditorLayer*>(top)) return Ok(static_cast<CCNode*>(editor->m_editorUI));
+            if (auto editor = typeinfo_cast<LevelEditorLayer*>(top)) {
+                // The pause menu opens inside the editor rather than on the scene
+                auto inside = layersOf(editor);
+                for (auto it = inside.rbegin(); it != inside.rend(); ++it) {
+                    if (typeinfo_cast<FLAlertLayer*>(*it) || typeinfo_cast<CCBlockLayer*>(*it)) return Ok(*it);
+                }
+                // The editor's buttons and the scale and rotate controls beside them
+                return Ok(static_cast<CCNode*>(editor));
+            }
             return Ok(top);
         }
 
@@ -192,7 +200,8 @@ namespace gdforge::rpc {
 
         // The editor's own buttons by the names the assistant may use for them.
         std::unordered_map<CCNode*, char const*> editorButtons(CCNode* root) {
-            auto ui = typeinfo_cast<EditorUI*>(root);
+            auto editor = typeinfo_cast<LevelEditorLayer*>(root);
+            auto ui = editor ? editor->m_editorUI : nullptr;
             if (!ui) return {};
             std::pair<CCNode*, char const*> const buttons[] = {
                 { ui->m_editObjectBtn, "editObject" }, { ui->m_editGroupBtn, "editGroup" },
@@ -349,13 +358,18 @@ namespace gdforge::rpc {
             std::string nearestLabel(CCRect const& rect) {
                 // Further than this a label belongs to something else, e.g. the window title
                 constexpr float REACH = 50.f;
+                // A label beside a control names it before one above or below does
+                constexpr float OTHER_ROW = 15.f;
                 CCNode* best = nullptr;
-                float bestGap = REACH;
+                float bestScore = REACH + OTHER_ROW;
                 for (auto const& [label, labelRect] : m_labels) {
                     auto distance = gap(rect, labelRect);
-                    if (distance < bestGap) {
+                    if (distance >= REACH) continue;
+                    auto sameRow = labelRect.getMidY() >= rect.getMinY() && labelRect.getMidY() <= rect.getMaxY();
+                    auto score = distance + (sameRow ? 0.f : OTHER_ROW);
+                    if (score < bestScore) {
                         best = label;
-                        bestGap = distance;
+                        bestScore = score;
                     }
                 }
                 return best ? static_cast<CCLabelBMFont*>(best)->getString() : "";
@@ -399,7 +413,7 @@ namespace gdforge::rpc {
             }
 
             auto layers = matjson::Value::array();
-            for (auto layer : sceneLayers(CCDirector::get()->getRunningScene())) layers.push(className(layer));
+            for (auto layer : layersOf(CCDirector::get()->getRunningScene())) layers.push(className(layer));
             auto winSize = CCDirector::get()->getWinSize();
             auto result = matjson::makeObject({
                 { "layer", className(root) },

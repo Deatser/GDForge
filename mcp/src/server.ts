@@ -23,7 +23,7 @@ import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 import { runUi } from "./ui.js";
 
-const VERSION = "0.4.2";
+const VERSION = "0.4.3";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.

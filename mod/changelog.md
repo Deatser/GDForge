@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.3
+- The editor's pause menu and its scale and rotate controls can be used
+- A control is named by the label beside it before one above or below
+- Keys 418 and 419 of sound triggers are named as in their windows: 418 changes the volume, 419 the speed
+
 ## v0.4.2
 - Which sounds are playing and how loud each comes out
 - Keys can be pressed and held, for the editor's shortcuts and for walking in a played level
