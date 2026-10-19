@@ -83,11 +83,11 @@ Changes are not saved until you save in the editor, exactly as with your own edi
 | | Editing, transforming, copying and deleting take uids, the current selection or an area |
 | `gd_select_objects` | Set the editor's selection |
 | `gd_undo`, `gd_redo` | Step through the editor's history |
-| `gd_set_camera` | Move and zoom the editor view |
-| `gd_playtest`, `gd_test` | Start or stop the playtest; play the level automatically with planned jumps and report where the player died |
+| `gd_set_camera` | Move and zoom the editor view, also during a playtest; switch Hide Invisible |
+| `gd_playtest`, `gd_test` | Start or stop the playtest; play the level automatically with planned jumps, and in platformer with left and right, and report where the player died |
 | `gd_screenshot` | Picture of what the game shows |
 | `gd_save_level` | Save the open level and write it to disk |
-| `gd_get_level_settings`, `gd_set_level_settings` | Read and change the level settings: start speed and mode, game type, options, art, font, song offset and fades, start colours |
+| `gd_get_level_settings`, `gd_set_level_settings` | Read and change the level settings: start speed and mode, game type, options, art, font, song with its offset and fades, start colours |
 | `gd_get_level_string` | The open level as the game saves it, settings included |
 | `gd_set_song`, `gd_find_songs` | Set the level's song (Newgrounds ID or one of the game's own); find songs the game already has |
 | `gd_reference` | Common object IDs and measured jump physics for classic play |
@@ -144,7 +144,7 @@ Two data files describe the game and are generated, not written by hand:
 
 ## Status
 
-Version 0.2 covers objects (reading, placing, editing, transforming, copying, deleting, selection, undo), automated playtests of classic sections, screenshots, saving and the level's song. Level settings (colours, speed, game mode) and testing platformer movement are not there yet.
+Version 0.3 covers objects (reading, placing, editing, transforming, copying, deleting, selection, undo), level settings, automated playtests of classic and platformer sections, screenshots, saving and the level's song.
 
 The macOS build is tested in the game on Apple Silicon. The Windows build is produced from the same code by CI and has not been verified yet.
 

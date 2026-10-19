@@ -21,11 +21,11 @@ namespace gdforge::rpc {
     geode::Result<Editor, RpcError> requireEditable() {
         GEODE_UNWRAP_INTO(auto editor, requireEditor());
         if (editor.layer->m_playbackMode != PlaybackMode::Not) {
-            return fail("playtesting", "The level is being playtested. Stop the playtest before changing objects.");
+            return fail("playtesting", "The level is being playtested. Stop the playtest first; the level cannot be changed while it runs.");
         }
         auto scene = CCDirector::get()->getRunningScene();
         if (scene && scene->getChildByType<FLAlertLayer>(0)) {
-            return fail("popup_open", "A popup is open in the editor. Close it before changing objects.");
+            return fail("popup_open", "A popup is open in the editor. Close it first; the level cannot be changed while it is open.");
         }
         return Ok(editor);
     }

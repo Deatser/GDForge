@@ -36,7 +36,7 @@ namespace gdforge::rpc {
 
     // The level editor, if one is open.
     geode::Result<Editor, RpcError> requireEditor();
-    // The level editor in a state where objects can be changed: not
+    // The level editor in a state where the level can be changed: not
     // playtesting, and no popup open that may hold pointers to objects.
     geode::Result<Editor, RpcError> requireEditable();
 

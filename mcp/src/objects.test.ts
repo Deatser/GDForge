@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { decodeObject, encodeObject, patchSaveString } from "./objects.js";
+import { decodeObject, decodeRaw, encodeObject, patchSaveString } from "./objects.js";
 
 // The save strings below were read back from the game itself.
 
@@ -38,6 +38,11 @@ test("names the properties of a trigger by its class", () => {
     moveOffsetY: 60,
     touchTriggered: true,
   });
+});
+
+test("takes the live position a playtest reports over the saved one", () => {
+  assert.deepEqual(decodeRaw([7, "1,1,2,15,3,15", 75.5, 45]), { uid: 7, id: 1, x: 75.5, y: 45 });
+  assert.deepEqual(decodeRaw([7, "1,1,2,15,3,15"]), { uid: 7, id: 1, x: 15, y: 15 });
 });
 
 test("keeps keys it has no name for", () => {

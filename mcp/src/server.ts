@@ -15,14 +15,14 @@ import {
   SPEEDS,
 } from "./levelSettings.js";
 import { CELL, MAP_LEGEND, type MapObject, renderMap } from "./map.js";
-import { decodeObject, encodeObject, type GDObject, type ObjectPatch, patchSaveString } from "./objects.js";
-import { runTest } from "./playtest.js";
+import { decodeObject, decodeRaw, encodeObject, type GDObject, type ObjectPatch, patchSaveString } from "./objects.js";
+import { checkInputs, runTest } from "./playtest.js";
 import { rgbaToPng } from "./png.js";
 import { REFERENCE } from "./reference.js";
 import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -330,7 +330,7 @@ export function createServer(bridge: Bridge): McpServer {
       return {
         total,
         ...(next < total ? { nextOffset: next } : {}),
-        objects: objects.map(([uid, saveString]) => decodeObject(saveString, uid)),
+        objects: objects.map(decodeRaw),
       };
     },
   );
@@ -504,12 +504,12 @@ export function createServer(bridge: Bridge): McpServer {
       const objects: MapObject[] = [];
       for (let offset = 0; ; ) {
         const page = await fetchObjects({ rect: [x1, y1, x2, y2], limit: 2000, offset });
-        for (const [, saveString] of page.objects) {
+        for (const [, saveString, liveX, liveY] of page.objects) {
           const fields = parseFields(saveString);
           objects.push({
             id: Number(fields.get(1)),
-            x: Number(fields.get(2)),
-            y: Number(fields.get(3)),
+            x: liveX ?? Number(fields.get(2)),
+            y: liveY ?? Number(fields.get(3)),
             noTouch: fields.get(121) === "1",
           });
         }
@@ -674,7 +674,7 @@ export function createServer(bridge: Bridge): McpServer {
     "gd_playtest",
     {
       title: "Start or stop the playtest",
-      description: "Start or stop the editor playtest, for the user to watch or play. Objects cannot be changed while it runs.",
+      description: "Start or stop the editor playtest, for the user to watch or play. The level cannot be changed while it runs.",
       inputSchema: { action: z.enum(["start", "stop"]) },
     },
     async ({ action }) => bridge.call(`playtest.${action}`),
@@ -685,41 +685,66 @@ export function createServer(bridge: Bridge): McpServer {
     {
       title: "Test the level automatically",
       description:
-        "Play the level automatically with a planned list of jump presses and get the result: passed, died, " +
-        "stopped (the user stopped the playtest) or timeout, where the run ended, the solid objects next to the " +
-        "player when it died, progress % and the player's path ('x,y;...'). The game presses the button itself at " +
-        "exact player x positions. Use it to check that a section is beatable, then fix the level or the inputs " +
-        "and retry. A cube tap while airborne does nothing: read the path to see where the player lands, and press " +
-        "after landing or from the edge of a block. Classic movement only for now: it presses jump, never left or " +
-        "right, so platformer sections cannot be tested yet. Stops a running playtest first; objects are not changed.",
+        "Play the level automatically with planned button presses and get the result: passed (reached untilX), " +
+        "ended (the duration was up and the player alive), died, stopped (the user stopped the playtest) or " +
+        "timeout, where and when the run ended, the solid objects next to the player when it died, progress % " +
+        "towards untilX and the player's path ('t,x,y;...': seconds since the start and position, every pathEvery " +
+        "seconds, skipping points where the player stood still). The game presses the buttons itself. Buttons are " +
+        "jump, left and right. Each input is pressed at a player x (x: classic levels, where the player only runs " +
+        "right) or at a time (t: seconds of game time since the start, for platformer levels). Each button plays " +
+        "its inputs in order and the buttons are independent, so the player can run right while jumping. Classic " +
+        "runs end at untilX (default just past the last object); platformer runs end after duration (default 2 " +
+        "seconds after the last timed input). Use it to check that a section is beatable, then fix the level or " +
+        "the inputs and retry. A cube tap while airborne does nothing, and so does one on the very first frame: " +
+        "read the path to see where the player lands, and press after landing or from the edge of a block. Stops " +
+        "a running playtest first; objects are not changed.",
       inputSchema: {
         inputs: z
           .array(
             z.object({
-              x: z.number().describe("Player x where the button is pressed"),
-              release: z.number().optional().describe("Player x where it is let go; omit for a tap (one jump)"),
+              button: z.enum(["jump", "left", "right"]).optional().describe("Default jump"),
+              x: z.number().optional().describe("Player x where the button is pressed"),
+              t: z.number().min(0).optional().describe("Seconds after the start when the button is pressed"),
+              release: z
+                .number()
+                .optional()
+                .describe("Where (with x) or when (with t) it is let go; omit for a tap (one jump)"),
             }),
           )
           .optional()
-          .describe("Button presses in order. Holding works for ship, wave and ufo, and for repeated cube jumps"),
-        untilX: z.number().optional().describe("The run counts as passed at this x. Default: just past the last object"),
+          .describe("Button presses. Holding works for ship, wave and ufo, for repeated cube jumps and for walking"),
+        untilX: z
+          .number()
+          .optional()
+          .describe("The run counts as passed at this x. Default: just past the last object in classic, none in platformer"),
+        duration: z.number().min(0.1).max(600).optional().describe("Seconds of game time before the run ends"),
         speed: z.number().min(0.25).max(4).optional().describe("Game speed while testing (default 1)"),
-        timeout: z.number().min(1).max(600).optional().describe("Seconds before giving up (default 120)"),
-        pathStep: z.number().min(5).max(300).optional().describe("Record the path every N units of x (default 30)"),
+        timeout: z.number().min(1).max(600).optional().describe("Real seconds before giving up (default 120)"),
+        pathEvery: z.number().min(0.02).max(2).optional().describe("Seconds between path points (default 0.1)"),
       },
     },
-    async (args) => runTest(bridge, args),
+    async (args) => {
+      checkInputs(args.inputs);
+      return runTest(bridge, args);
+    },
   );
 
   tool(
     "gd_set_camera",
     {
       title: "Move the editor view",
-      description: "Centre the editor view on a point and/or set the zoom (0.1 to 4, 1 is default).",
+      description:
+        "Centre the editor view on a point and/or set the zoom (0.1 to 4, 1 is default). During a playtest the " +
+        "view stays on the point instead of following the player, until follow: true or the next playtest. " +
+        "hideInvisible switches the editor's own Hide Invisible option (its pause menu): hidden objects, " +
+        "triggers and their icons disappear from the playtest view and from screenshots. It is the user's " +
+        "setting and stays as set.",
       inputSchema: {
         x: z.number().optional(),
         y: z.number().optional(),
         zoom: z.number().min(0.1).max(4).optional(),
+        follow: z.boolean().optional().describe("During a playtest: follow the player again"),
+        hideInvisible: z.boolean().optional(),
       },
     },
     async (args) => bridge.call<Camera>("editor.camera", args),
@@ -864,8 +889,9 @@ export function createServer(bridge: Bridge): McpServer {
       title: "Read the level settings",
       description:
         "The open level's settings, as in the editor's gear button: start speed and mode, game type, options, " +
-        "spawn group, background, ground, middleground and font, the song's offset and fades, and the start " +
-        "colours of the colour channels.",
+        "spawn group, background, ground, middleground and font, the song (songId: the custom song, 0 for none; " +
+        "track: the game's own song, used while songId is 0) with its offset and fades, and the start colours " +
+        "of the colour channels.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },

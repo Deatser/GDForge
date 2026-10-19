@@ -6,6 +6,7 @@
 // `props`, keyed by the property's name when it is known and by its numeric
 // save-string key otherwise. Unknown keys always round-trip untouched.
 
+import type { RawObject } from "./bridge.js";
 import { lookupObject } from "./catalog.js";
 import { type Fields, formatNumber, parseFields, serializeFields } from "./saveString.js";
 import { type Property, type Schema, schemaFor } from "./schema.js";
@@ -206,6 +207,13 @@ export function decodeObject(saveString: string, uid?: number): GDObject {
 
   if (Object.keys(props).length > 0) object.props = props;
   return object;
+}
+
+// An object as the bridge sends it. During a playtest its save string may still
+// hold where it started, so the live position that comes with it wins.
+export function decodeRaw([uid, saveString, x, y]: RawObject): GDObject {
+  const object = decodeObject(saveString, uid);
+  return x === undefined || y === undefined ? object : { ...object, x, y };
 }
 
 function setField(fields: Fields, key: number, value: string | null): void {

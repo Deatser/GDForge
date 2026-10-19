@@ -89,5 +89,5 @@ export interface Status {
   editor: EditorInfo | null;
 }
 
-// [uid, save string]
-export type RawObject = [number, string];
+// [uid, save string], plus the live x and y while a playtest runs
+export type RawObject = [number, string] | [number, string, number, number];

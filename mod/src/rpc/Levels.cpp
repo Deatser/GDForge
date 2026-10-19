@@ -132,9 +132,9 @@ namespace gdforge::rpc {
         };
 
         // The level settings of the gear button: start speed and mode, game
-        // type, options, art, font and the song's offset and fades. Colour
+        // type, options, art, font, the song and its offset and fades. Colour
         // channels are in the "kS38" part of saveString, as the game saves them.
-        matjson::Value settingsJson(LevelSettingsObject* settings) {
+        matjson::Value settingsJson(LevelSettingsObject* settings, GJGameLevel* level) {
             auto legacy = matjson::Value::object();
             for (auto const& [key, member] : LEGACY_OPTIONS) legacy[key] = settings->*member;
             return matjson::makeObject({
@@ -154,6 +154,9 @@ namespace gdforge::rpc {
                 { "ground", settings->m_groundIndex },
                 { "middleground", settings->m_middleGroundIndex },
                 { "font", settings->m_fontIndex },
+                // A custom song wins over the game's own track while songId is above 0
+                { "songId", level->m_songID },
+                { "track", level->m_audioTrack },
                 { "songOffset", settings->m_songOffset },
                 { "fadeIn", settings->m_fadeIn },
                 { "fadeOut", settings->m_fadeOut },
@@ -165,7 +168,7 @@ namespace gdforge::rpc {
 
         RpcResult getSettings(matjson::Value const&) {
             GEODE_UNWRAP_INTO(auto editor, requireEditor());
-            return Ok(settingsJson(editor.layer->m_levelSettings));
+            return Ok(settingsJson(editor.layer->m_levelSettings, editor.layer->m_level));
         }
 
         // Changes the given level settings and start colours, then lets the
@@ -270,10 +273,16 @@ namespace gdforge::rpc {
                 if (action->m_colorSprite) effects->updateColorAction(action);
             }
 
+            // levelSettingsUpdated keeps the old art on screen; the art window rebuilds it
+            if (!params["background"].isNull()) editor.layer->createBackground(settings->m_backgroundIndex);
+            if (!params["ground"].isNull()) editor.layer->createGroundLayer(settings->m_groundIndex, settings->m_groundLineIndex);
+            if (!params["middleground"].isNull()) editor.layer->createMiddleground(settings->m_middleGroundIndex);
+            if (!params["font"].isNull()) editor.layer->updateLevelFont(settings->m_fontIndex);
+
             editor.layer->m_updateColorSprites = true;
             editor.layer->updateOptions();
             editor.layer->levelSettingsUpdated();
-            return Ok(settingsJson(settings));
+            return Ok(settingsJson(settings, editor.layer->m_level));
         }
 
         // Audio files the game has, downloaded songs first. Songs downloaded from

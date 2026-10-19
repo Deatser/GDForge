@@ -6,7 +6,7 @@
 	},
 	"id": "gdforge.editor",
 	"name": "GD Forge",
-	"version": "v0.3.1",
+	"version": "v0.3.2",
 	"developer": "GD Forge",
 	"description": "Lets an AI assistant build in the level editor through MCP",
 	"settings": {

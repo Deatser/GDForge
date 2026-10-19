@@ -1,8 +1,12 @@
 #include "Rpc.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <map>
+#include <optional>
 #include <set>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -72,9 +76,35 @@ namespace gdforge::rpc {
             std::vector<int> m_uids;
         };
 
+        // A colour trigger pasted from a string the game did not write itself comes
+        // out with opacity 1, whatever its key 35 says. Puts the value back.
+        void restoreTriggerOpacity(CCArray* created, std::string const& data) {
+            std::vector<std::optional<float>> opacities;
+            std::istringstream objects(data);
+            for (std::string object; std::getline(objects, object, ';');) {
+                if (object.empty()) continue;
+                std::istringstream fields(object);
+                std::optional<float> opacity;
+                for (std::string key, value; std::getline(fields, key, ',') && std::getline(fields, value, ',');) {
+                    if (key == "35") opacity = std::strtof(value.c_str(), nullptr);
+                }
+                opacities.push_back(opacity);
+            }
+            // The game drops objects it refuses (a second secret coin...), and then the order no longer matches
+            if (!created || opacities.size() != created->count()) return;
+            for (size_t i = 0; i < opacities.size(); i++) {
+                auto object = static_cast<GameObject*>(created->objectAtIndex(i));
+                if (opacities[i] && object->m_classType == GameObjectClassType::Effect) {
+                    static_cast<EffectGameObject*>(object)->m_opacity = *opacities[i];
+                }
+            }
+        }
+
         std::vector<int> paste(Editor const& editor, std::string const& data) {
             // Paste-in-place: keeps positions, records one undo step, selects the result
-            return uidsOf(editor.ui->pasteObjects(data, false, false));
+            auto created = editor.ui->pasteObjects(data, false, false);
+            restoreTriggerOpacity(created, data);
+            return uidsOf(created);
         }
 
         int deleteAll(Editor const& editor, CCArray* objects) {
@@ -110,6 +140,13 @@ namespace gdforge::rpc {
                 ? editor.ui->getSelectedObjects()
                 : editor.layer->m_objects;
 
+            // During a playtest the game moves objects by their gameplay position and
+            // redraws only those near the camera, so the drawn position can be stale
+            auto playing = editor.layer->m_playbackMode != PlaybackMode::Not;
+            auto positionOf = [playing](GameObject* object) {
+                return playing ? object->getRealPosition() : object->getPosition();
+            };
+
             std::vector<GameObject*> matches;
             for (auto object : CCArrayExt<GameObject*>(source)) {
                 if (!uidFilter.empty() && !uidFilter.contains(object->m_uniqueID)) continue;
@@ -117,16 +154,16 @@ namespace gdforge::rpc {
                 if (group && !inGroup(object, *group)) continue;
                 if (editorLayer && object->m_editorLayer != *editorLayer && object->m_editorLayer2 != *editorLayer) continue;
                 if (rect.size() == 4) {
-                    auto pos = toLevel(object->getPosition());
+                    auto pos = toLevel(positionOf(object));
                     if (pos.x < rect[0] || pos.y < rect[1] || pos.x > rect[2] || pos.y > rect[3]) continue;
                 }
                 matches.push_back(object);
             }
 
             // Left to right, the order a level is read in
-            std::sort(matches.begin(), matches.end(), [](GameObject* a, GameObject* b) {
-                auto pa = a->getPosition();
-                auto pb = b->getPosition();
+            std::sort(matches.begin(), matches.end(), [&](GameObject* a, GameObject* b) {
+                auto pa = positionOf(a);
+                auto pb = positionOf(b);
                 if (pa.x != pb.x) return pa.x < pb.x;
                 if (pa.y != pb.y) return pa.y < pb.y;
                 return a->m_uniqueID < b->m_uniqueID;
@@ -137,6 +174,12 @@ namespace gdforge::rpc {
                 auto entry = matjson::Value::array();
                 entry.push(matches[i]->m_uniqueID);
                 entry.push(std::string(matches[i]->getSaveString(editor.layer)));
+                // The live position, which the save string may not have yet
+                if (playing) {
+                    auto pos = toLevel(positionOf(matches[i]));
+                    entry.push(std::round(static_cast<double>(pos.x) * 100) / 100);
+                    entry.push(std::round(static_cast<double>(pos.y) * 100) / 100);
+                }
                 objects.push(std::move(entry));
             }
             return Ok(matjson::makeObject({

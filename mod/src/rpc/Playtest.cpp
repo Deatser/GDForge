@@ -10,8 +10,10 @@
 #include <Geode/modify/PlayerObject.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <optional>
 
 using namespace geode::prelude;
 
@@ -19,24 +21,42 @@ namespace gdforge::rpc {
 
     namespace {
         struct Input {
+            // Pressed at a time (seconds since the run started) or at a player x
+            bool byTime;
             double press;
-            // Player x where the button is let go; below 0 releases on the next physics step (a tap)
-            double release;
+            // When or where it is let go, in the same unit; none lets go on the next physics step (a tap)
+            std::optional<double> release;
+        };
+
+        // The inputs of one button, played one after another. Buttons are independent,
+        // so the player can run right while jumping.
+        struct ButtonQueue {
+            // As GJBaseGameLayer::handleButton numbers them: 1 jump, 2 left, 3 right
+            int button;
+            std::vector<Input> inputs;
+            size_t next = 0;
+            bool holding = false;
         };
 
         struct TestRun {
             bool active = false;
             bool finished = false;
-            std::vector<Input> inputs;
-            size_t next = 0;
-            bool holding = false;
-            double untilX = 0;
+            std::array<ButtonQueue, 3> queues { ButtonQueue { 1 }, ButtonQueue { 2 }, ButtonQueue { 3 } };
+            // Ends the run as passed once the player reaches it
+            std::optional<double> untilX;
+            // Ends the run as ended after this many seconds of game time
+            std::optional<double> duration;
             double startX = 0;
-            double nextPathX = 0;
-            double pathStep = 30;
+            // The game's clock at the first physics step, and seconds of game time since then
+            std::optional<double> clockStart;
+            double time = 0;
+            double nextPathTime = 0;
+            double pathEvery = 0.1;
             double timeout = 120;
-            // "x,y;" per pathStep of x, in level coordinates. A string keeps long paths cheap to read.
+            // "t,x,y;" every pathEvery seconds, in level coordinates, skipping points where the
+            // player has not moved. A string keeps long paths cheap to read.
             std::string path;
+            std::string lastPoint;
             std::string outcome;
             // Player position after the latest physics step, and where the run ended, in layer coordinates
             CCPoint lastPos;
@@ -53,6 +73,14 @@ namespace gdforge::rpc {
 
         void finish(std::string outcome, CCPoint pos) {
             if (!s_run.active) return;
+            // A button still held would stay held in the user's next playtest
+            auto layer = LevelEditorLayer::get();
+            for (auto& queue : s_run.queues) {
+                if (queue.holding && layer && layer->m_playbackMode != PlaybackMode::Not) {
+                    layer->handleButton(false, queue.button, true);
+                }
+                queue.holding = false;
+            }
             s_run.active = false;
             s_run.finished = true;
             s_run.outcome = std::move(outcome);
@@ -67,35 +95,52 @@ namespace gdforge::rpc {
             });
         }
 
-        // Press and release the planned inputs at the player's current x.
+        // Press and release the planned inputs at the current time and player x.
         void beforeStep(GJBaseGameLayer* layer) {
             if (!s_run.active || !isEditorGame(layer)) return;
+            // Game time, so it follows the test speed and the level's own time warps
+            auto clock = layer->m_gameState.m_totalTime;
+            if (!s_run.clockStart) s_run.clockStart = clock;
+            s_run.time = clock - *s_run.clockStart;
+
             double x = layer->m_player1->getPositionX();
-            if (s_run.holding) {
-                auto const& input = s_run.inputs[s_run.next];
-                if (input.release < 0 || x >= input.release) {
-                    layer->handleButton(false, 1, true);
-                    s_run.holding = false;
-                    s_run.next++;
+            auto reached = [&](Input const& input, double value) { return (input.byTime ? s_run.time : x) >= value; };
+            for (auto& queue : s_run.queues) {
+                if (queue.holding) {
+                    auto const& input = queue.inputs[queue.next];
+                    if (!input.release || reached(input, *input.release)) {
+                        layer->handleButton(false, queue.button, true);
+                        queue.holding = false;
+                        queue.next++;
+                    }
                 }
-            }
-            if (!s_run.holding && s_run.next < s_run.inputs.size() && x >= s_run.inputs[s_run.next].press) {
-                layer->handleButton(true, 1, true);
-                s_run.holding = true;
+                if (!queue.holding && queue.next < queue.inputs.size()) {
+                    auto const& input = queue.inputs[queue.next];
+                    if (reached(input, input.press)) {
+                        layer->handleButton(true, queue.button, true);
+                        queue.holding = true;
+                    }
+                }
             }
         }
 
-        // Record the path and end the run once the player reaches the goal.
+        // Record the path and end the run once the player reaches the goal or the time is up.
         void afterStep(GJBaseGameLayer* layer) {
             if (!s_run.active || !isEditorGame(layer)) return;
             auto pos = layer->m_player1->getPosition();
             s_run.lastPos = pos;
-            while (pos.x >= s_run.nextPathX) {
+            if (s_run.time >= s_run.nextPathTime) {
                 auto point = toLevel(pos);
-                s_run.path += fmt::format("{:.0f},{:.0f};", point.x, point.y);
-                s_run.nextPathX += s_run.pathStep;
+                auto xy = fmt::format("{:.0f},{:.0f}", point.x, point.y);
+                // A player standing still adds nothing; the time of the next point shows when it moved
+                if (xy != s_run.lastPoint) {
+                    s_run.path += fmt::format("{:.2f},{};", s_run.time, xy);
+                    s_run.lastPoint = std::move(xy);
+                }
+                s_run.nextPathTime = (std::floor(s_run.time / s_run.pathEvery) + 1) * s_run.pathEvery;
             }
-            if (pos.x >= s_run.untilX) finish("passed", pos);
+            if (s_run.untilX && pos.x >= *s_run.untilX) finish("passed", pos);
+            else if (s_run.duration && s_run.time >= *s_run.duration) finish("ended", pos);
         }
 
         // Solid objects close to where the player died, most likely the cause.
@@ -150,30 +195,60 @@ namespace gdforge::rpc {
             if (s_run.active) return fail("test_running", "A test is already running.");
             if (editor.layer->m_playbackMode != PlaybackMode::Not) editor.ui->onStopPlaytest(nullptr);
 
-            std::vector<Input> inputs;
+            s_run = TestRun {};
             if (params["inputs"].isArray()) {
                 for (auto const& item : params["inputs"]) {
-                    auto press = item.isObject() ? optNumber(item["x"]) : optNumber(item);
+                    // A bare number is a jump at that x
+                    auto button = item.isObject() ? item["button"].asString().unwrapOr("jump") : std::string("jump");
+                    auto queue = button == "jump" ? 0 : button == "left" ? 1 : button == "right" ? 2 : -1;
+                    if (queue < 0) return fail("bad_params", "\"button\" must be jump, left or right");
+                    auto byTime = item.isObject() && !item["t"].isNull();
+                    auto press = item.isObject() ? optNumber(byTime ? item["t"] : item["x"]) : optNumber(item);
                     if (!press) continue;
                     auto release = item.isObject() ? optNumber(item["release"]) : std::nullopt;
-                    inputs.push_back({ *press, release.value_or(-1) });
+                    s_run.queues[queue].inputs.push_back({ byTime, *press, release });
                 }
             }
-            std::sort(inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.press < b.press; });
-
-            // Default goal: a bit past the last gameplay object
-            double lastObjectX = 0;
-            for (auto object : CCArrayExt<GameObject*>(editor.layer->m_objects)) {
-                if (!object->m_isDecoration && !object->m_isTrigger) {
-                    lastObjectX = std::max<double>(lastObjectX, object->getPositionX());
+            for (auto& queue : s_run.queues) {
+                auto& inputs = queue.inputs;
+                // In press order, unless times and positions are mixed: those keep the order given
+                auto sameUnit = std::all_of(inputs.begin(), inputs.end(), [&](Input const& input) {
+                    return input.byTime == inputs.front().byTime;
+                });
+                if (sameUnit) {
+                    std::stable_sort(inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.press < b.press; });
                 }
             }
 
-            s_run = TestRun {};
-            s_run.inputs = std::move(inputs);
-            s_run.untilX = optNumber(params["untilX"]).value_or(lastObjectX + 90);
+            // Default goal in classic: a bit past the last gameplay object. A platformer
+            // level has no direction to finish in, so it plays for a while instead.
+            if (auto untilX = optNumber(params["untilX"])) {
+                s_run.untilX = *untilX;
+            }
+            else if (!editor.layer->m_levelSettings->m_platformerMode) {
+                double lastObjectX = 0;
+                for (auto object : CCArrayExt<GameObject*>(editor.layer->m_objects)) {
+                    if (!object->m_isDecoration && !object->m_isTrigger) {
+                        lastObjectX = std::max<double>(lastObjectX, object->getPositionX());
+                    }
+                }
+                s_run.untilX = lastObjectX + 90;
+            }
+            if (auto duration = optNumber(params["duration"])) {
+                s_run.duration = std::clamp(*duration, 0.1, 600.0);
+            }
+            else if (!s_run.untilX) {
+                // Play the timed inputs out, then watch what happens for two more seconds
+                double last = 0;
+                for (auto const& queue : s_run.queues) {
+                    for (auto const& input : queue.inputs) {
+                        if (input.byTime) last = std::max(last, input.release.value_or(input.press));
+                    }
+                }
+                s_run.duration = last + 2;
+            }
             // Finer sampling helps measure jumps; coarser keeps the reply short
-            s_run.pathStep = std::clamp(optNumber(params["pathStep"]).value_or(30), 5.0, 300.0);
+            s_run.pathEvery = std::clamp(optNumber(params["pathEvery"]).value_or(0.1), 0.02, 2.0);
             s_run.timeout = std::clamp(optNumber(params["timeout"]).value_or(120), 1.0, 600.0);
             s_run.started = std::chrono::steady_clock::now();
 
@@ -185,9 +260,13 @@ namespace gdforge::rpc {
 
             editor.ui->onPlaytest(nullptr);
             s_run.startX = editor.layer->m_player1 ? editor.layer->m_player1->getPositionX() : 0;
-            s_run.nextPathX = s_run.startX;
             s_run.active = true;
-            return Ok(matjson::makeObject({ { "started", true }, { "untilX", s_run.untilX } }));
+            auto optional = [](std::optional<double> value) { return value ? matjson::Value(*value) : matjson::Value(nullptr); };
+            return Ok(matjson::makeObject({
+                { "started", true },
+                { "untilX", optional(s_run.untilX) },
+                { "duration", optional(s_run.duration) },
+            }));
         }
 
         RpcResult testPoll(matjson::Value const&) {
@@ -196,17 +275,22 @@ namespace gdforge::rpc {
             if (!s_run.finished) return fail("no_test", "No test has been run.");
 
             auto end = toLevel(s_run.endPos);
-            auto length = s_run.untilX - s_run.startX;
-            auto progress = length > 0 ? std::clamp((s_run.endPos.x - s_run.startX) / length * 100, 0.0, 100.0) : 0.0;
+            int inputsUsed = 0;
+            for (auto const& queue : s_run.queues) inputsUsed += static_cast<int>(queue.next);
             auto result = matjson::makeObject({
                 { "running", false },
                 { "result", s_run.outcome },
                 { "x", std::round(end.x) },
                 { "y", std::round(end.y) },
-                { "progressPercent", std::round(progress) },
-                { "inputsUsed", static_cast<int>(s_run.next) },
+                { "time", std::round(s_run.time * 100) / 100 },
+                { "inputsUsed", inputsUsed },
                 { "path", s_run.path },
             });
+            if (s_run.untilX) {
+                auto length = *s_run.untilX - s_run.startX;
+                auto progress = length > 0 ? std::clamp((s_run.endPos.x - s_run.startX) / length * 100, 0.0, 100.0) : 0.0;
+                result["progressPercent"] = std::round(progress);
+            }
             auto layer = LevelEditorLayer::get();
             if (s_run.outcome == "died" && layer) result["objectsNearDeath"] = objectsNear(layer, s_run.endPos);
             return Ok(result);
