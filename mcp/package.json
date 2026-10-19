@@ -1,6 +1,6 @@
 {
   "name": "gdforge-mcp",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "MCP server that lets AI assistants build in the Geometry Dash level editor",
   "type": "module",
   "bin": {

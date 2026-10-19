@@ -23,7 +23,7 @@ import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 import { runUi } from "./ui.js";
 
-const VERSION = "0.4.3";
+const VERSION = "0.4.4";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -1046,7 +1046,7 @@ export function createServer(bridge: Bridge): McpServer {
     {
       title: "What is playing",
       description:
-        "Every sound the game is playing right now: the file, its group, its own volume, how loud it actually " +
+        "Every sound the game is playing right now: the file, the song channel for music, its own volume, how loud it actually " +
         "comes out (audible: every volume applied to it multiplied together), pitch and position, and the " +
         "player's music and SFX volume settings. Checks sound triggers without listening: call it during a playtest, " +
         "e.g. near and far from a proximity sound, before and after an Edit SFX or Edit Song.",

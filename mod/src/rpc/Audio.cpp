@@ -6,6 +6,7 @@
 #include <Geode/fmod/fmod.hpp>
 
 #include <cmath>
+#include <unordered_map>
 
 using namespace geode::prelude;
 
@@ -16,7 +17,24 @@ namespace gdforge::rpc {
             return std::round(value * 1000.0) / 1000.0;
         }
 
-        void collect(FMOD::ChannelGroup* group, std::string const& parent, matjson::Value& out) {
+        // FMOD keeps no file names for the game's sounds; the engine's own tables do.
+        struct Files {
+            std::unordered_map<FMOD::Sound*, std::string> sfx;
+            std::unordered_map<FMOD::Sound*, std::pair<int, std::string>> music;
+        };
+
+        Files filesOf(FMODAudioEngine* engine) {
+            Files files;
+            for (auto const& [path, sound] : engine->m_soundPathToSound) {
+                if (sound) files.sfx[sound] = std::string(path);
+            }
+            for (auto const& [channel, music] : engine->m_fmodMusic) {
+                if (music.m_sound) files.music[music.m_sound] = { channel, std::string(music.m_filePath) };
+            }
+            return files;
+        }
+
+        void collect(FMOD::ChannelGroup* group, std::string const& parent, Files const& files, matjson::Value& out) {
             char name[256] = {};
             group->getName(name, sizeof(name));
             auto path = parent.empty() ? std::string(name) : parent + "/" + name;
@@ -32,6 +50,13 @@ namespace gdforge::rpc {
                 char file[512] = {};
                 FMOD::Sound* sound = nullptr;
                 if (channel->getCurrentSound(&sound) == FMOD_OK && sound) sound->getName(file, sizeof(file));
+                std::string soundName = file;
+                std::optional<int> musicChannel;
+                if (auto it = files.music.find(sound); it != files.music.end()) {
+                    musicChannel = it->second.first;
+                    soundName = it->second.second;
+                }
+                else if (auto it = files.sfx.find(sound); it != files.sfx.end()) soundName = it->second;
                 float volume = 0.f;
                 float audibility = 0.f;
                 float pitch = 1.f;
@@ -45,7 +70,7 @@ namespace gdforge::rpc {
                 channel->getPosition(&position, FMOD_TIMEUNIT_MS);
 
                 auto entry = matjson::makeObject({
-                    { "sound", std::string(file) },
+                    { "sound", soundName },
                     { "group", path },
                     { "volume", tidy(volume) },
                     { "audible", tidy(audibility) },
@@ -53,6 +78,8 @@ namespace gdforge::rpc {
                     { "positionMs", static_cast<int>(position) },
                 });
                 if (paused) entry["paused"] = true;
+                // Songs play on numbered channels, which Song and Edit Song triggers address
+                if (musicChannel) entry["musicChannel"] = *musicChannel;
                 out.push(std::move(entry));
             }
 
@@ -60,7 +87,7 @@ namespace gdforge::rpc {
             group->getNumGroups(&groups);
             for (int i = 0; i < groups; ++i) {
                 FMOD::ChannelGroup* child = nullptr;
-                if (group->getGroup(i, &child) == FMOD_OK && child) collect(child, path, out);
+                if (group->getGroup(i, &child) == FMOD_OK && child) collect(child, path, files, out);
             }
         }
 
@@ -71,7 +98,7 @@ namespace gdforge::rpc {
                 return fail("internal", "The game's sound system is not running.");
             }
             auto sounds = matjson::Value::array();
-            collect(master, "", sounds);
+            collect(master, "", filesOf(engine), sounds);
             return Ok(matjson::makeObject({
                 // The player's settings, which scale everything below
                 { "musicVolume", tidy(engine->m_musicVolume) },

@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.4
+- The sounds playing are reported with their files, and songs with their channel
+
 ## v0.4.3
 - The editor's pause menu and its scale and rotate controls can be used
 - A control is named by the label beside it before one above or below
