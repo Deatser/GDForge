@@ -146,7 +146,7 @@ Two data files describe the game and are generated, not written by hand:
 
 Version 0.3 covers objects (reading, placing, editing, transforming, copying, deleting, selection, undo), level settings, automated playtests of classic and platformer sections, screenshots, saving and the level's song.
 
-The macOS build is tested in the game on Apple Silicon. The Windows build is produced from the same code by CI and has not been verified yet.
+The macOS build is tested in the game on Apple Silicon, the Windows build on Windows 11 with GD 2.2081.
 
 ## Credits
 

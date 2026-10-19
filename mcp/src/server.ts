@@ -22,7 +22,7 @@ import { REFERENCE } from "./reference.js";
 import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -735,8 +735,8 @@ export function createServer(bridge: Bridge): McpServer {
       title: "Move the editor view",
       description:
         "Centre the editor view on a point and/or set the zoom (0.1 to 4, 1 is default). During a playtest the " +
-        "view stays on the point instead of following the player, until follow: true or the next playtest; the " +
-        "background and ground stay where the game's camera puts them. hideInvisible switches the editor's own " +
+        "view stays on the point instead of following the player, until follow: true or the next playtest, and " +
+        "zoom works like a zoom trigger until the playtest ends. hideInvisible switches the editor's own " +
         "Hide Invisible option (its pause menu): objects with Hide ticked disappear from the view and from " +
         "screenshots, while triggers and Collision Blocks stay visible. It is the user's setting and stays as set.",
       inputSchema: {

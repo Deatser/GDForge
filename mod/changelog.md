@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.3
+- Zooming during a playtest; the background and ground follow a view held on a point
+
 ## v0.3.2
 - Automated tests in platformer: left, right and jump at set times; the path is recorded by time
 - The view can stay on a point during a playtest, and Hide Invisible can be switched

@@ -33,6 +33,8 @@ namespace gdforge::rpc {
             auto corner = ccp(centre.x - winSize.width * .5f / zoom, centre.y - winSize.height * .5f / zoom);
             layer->m_gameState.m_cameraPosition = corner;
             objectLayer->setPosition(ccp(-corner.x * zoom, -corner.y * zoom));
+            // The game has already placed the background, middleground and ground for its own camera
+            layer->updateCameraBGArt(corner, zoom);
         }
 
         RpcResult status(matjson::Value const&) {
@@ -77,7 +79,10 @@ namespace gdforge::rpc {
                 GameManager::get()->setGameVariable(HIDE_INVISIBLE, params["hideInvisible"].asBool().unwrap());
             }
             if (auto zoom = optNumber(params["zoom"])) {
-                editor.ui->updateZoom(std::clamp(static_cast<float>(*zoom), .1f, 4.f));
+                auto value = std::clamp(static_cast<float>(*zoom), .1f, 4.f);
+                // A playtest has its own camera zoom, the one zoom triggers change
+                if (playing) editor.layer->updateZoom(value, 0.f, 0, 1.f, 0, 0);
+                else editor.ui->updateZoom(value);
             }
             auto x = optNumber(params["x"]);
             auto y = optNumber(params["y"]);
