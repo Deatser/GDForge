@@ -735,10 +735,10 @@ export function createServer(bridge: Bridge): McpServer {
       title: "Move the editor view",
       description:
         "Centre the editor view on a point and/or set the zoom (0.1 to 4, 1 is default). During a playtest the " +
-        "view stays on the point instead of following the player, until follow: true or the next playtest. " +
-        "hideInvisible switches the editor's own Hide Invisible option (its pause menu): hidden objects, " +
-        "triggers and their icons disappear from the playtest view and from screenshots. It is the user's " +
-        "setting and stays as set.",
+        "view stays on the point instead of following the player, until follow: true or the next playtest; the " +
+        "background and ground stay where the game's camera puts them. hideInvisible switches the editor's own " +
+        "Hide Invisible option (its pause menu): objects with Hide ticked disappear from the view and from " +
+        "screenshots, while triggers and Collision Blocks stay visible. It is the user's setting and stays as set.",
       inputSchema: {
         x: z.number().optional(),
         y: z.number().optional(),
