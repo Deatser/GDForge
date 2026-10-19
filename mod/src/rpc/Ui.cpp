@@ -94,6 +94,11 @@ namespace gdforge::rpc {
         // number while the window only shows and hides parts of itself.
         void collect(CCNode* node, bool shown, std::vector<Control>& out) {
             shown = shown && node->isVisible();
+            // A label is a sprite batch too, so it is told apart before batches are skipped
+            if (auto label = typeinfo_cast<CCLabelBMFont*>(node)) {
+                if (*label->getString()) out.push_back({ node, Kind::Label, shown });
+                return;
+            }
             // Level objects and their batches hold no controls, only a lot of nodes
             if (typeinfo_cast<GameObject*>(node) || typeinfo_cast<CCSpriteBatchNode*>(node)) return;
             if (typeinfo_cast<CCMenuItemToggler*>(node)) return out.push_back({ node, Kind::Toggle, shown });
@@ -101,10 +106,6 @@ namespace gdforge::rpc {
             if (typeinfo_cast<CCTextInputNode*>(node)) return out.push_back({ node, Kind::Input, shown });
             if (typeinfo_cast<CCMenuItem*>(node)) return out.push_back({ node, Kind::Button, shown });
             if (typeinfo_cast<cocos2d::extension::CCControl*>(node)) return out.push_back({ node, Kind::Control, shown });
-            if (auto label = typeinfo_cast<CCLabelBMFont*>(node)) {
-                if (*label->getString()) out.push_back({ node, Kind::Label, shown });
-                return;
-            }
             if (auto children = node->getChildren()) {
                 for (auto child : CCArrayExt<CCNode*>(children)) collect(child, shown, out);
             }
