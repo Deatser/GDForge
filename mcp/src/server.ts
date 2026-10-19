@@ -21,8 +21,9 @@ import { rgbaToPng } from "./png.js";
 import { REFERENCE } from "./reference.js";
 import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
+import { runUi } from "./ui.js";
 
-const VERSION = "0.3.3";
+const VERSION = "0.4.0";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -1008,10 +1009,87 @@ export function createServer(bridge: Bridge): McpServer {
     },
     async () => {
       try {
-        const { path, width, height } = await bridge.call<{ path: string; width: number; height: number }>("screenshot");
+        const { path, width, height, points } = await bridge.call<{
+          path: string;
+          width: number;
+          height: number;
+          // Absent from mods before 0.4
+          points?: { width: number; height: number };
+        }>("screenshot");
         // Keep the picture around 1280 wide: plenty to judge a level, and much cheaper to read
-        const png = rgbaToPng(await readFile(path), width, height, Math.max(1, Math.round(width / 1280)));
-        return { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }] };
+        const shrink = Math.max(1, Math.round(width / 1280));
+        const png = rgbaToPng(await readFile(path), width, height, shrink);
+        const [imageWidth, imageHeight] = [Math.floor(width / shrink), Math.floor(height / shrink)];
+        return {
+          content: [
+            { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+            ...(points
+              ? [
+                  {
+                    type: "text" as const,
+                    text:
+                      `The image is ${imageWidth}x${imageHeight} pixels; the screen is ${points.width}x${points.height} ` +
+                      "points, the unit of gd_ui positions, with y going up from the bottom.",
+                  },
+                ]
+              : []),
+          ],
+        };
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  const uiTarget = z
+    .union([z.number().int(), z.string()])
+    .describe("The control's number from the listing, or what it says or is labelled, or an editor button's name");
+  const uiAction = z.object({
+    click: uiTarget.optional().describe("Press a button or checkbox"),
+    check: uiTarget.optional().describe("Set a checkbox to on"),
+    on: z.boolean().optional(),
+    type: uiTarget.optional().describe("Type text into a field"),
+    text: z.string().max(2000).optional(),
+    slide: uiTarget.optional().describe("Move a slider to value"),
+    value: z.number().min(0).max(1).optional().describe("0 left, 1 right"),
+    tap: z.tuple([z.number(), z.number()]).optional().describe("Touch the screen at [x, y] in points"),
+    drag: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional().describe("Drag from [x, y] to [toX, toY]"),
+    back: z.boolean().optional().describe("Escape: closes the window on top"),
+    wait: z.number().min(0).max(10).optional().describe("Seconds to wait"),
+  });
+
+  server.registerTool(
+    "gd_ui",
+    {
+      title: "Use the game's windows",
+      description:
+        "Use the game's windows the way the user does: whatever is on top (a trigger's settings, Edit Object, " +
+        "Edit Group, Edit Special, HSV, colour and easing pickers, the pause menu, any window those open) or, " +
+        "when nothing covers it, the editor's own buttons. Without actions it lists the controls on screen: a " +
+        "number (#), the kind (button, toggle = checkbox, input = text field, slider, control, label), what it " +
+        "says or the label beside it, and its centre in screen points (x right, y up from the bottom left; " +
+        "gd_screenshot shows the same screen). In trigger windows a field's tag is often the save-string key it " +
+        "sets. Actions run in order, each like a click of the user's, and the window is listed again afterwards. " +
+        "Each action has one verb: click (a button or checkbox), check + on (set a checkbox), type + text (fill " +
+        "a field as if typed, then left), slide + value (0-1), tap [x, y] and drag [x, y, toX, toY] (touch the " +
+        "screen, e.g. a preview or a colour wheel), back (Escape) or wait (seconds). Name controls by number, " +
+        'or by what they say ("OK", a label such as "Move X") or, in the editor, by button name: editObject, ' +
+        "editGroup, editSpecial, editHSV, copyValues, pasteState, pasteColor, goToLayer, deselect, playtest, " +
+        "stopPlaytest. Numbers stay valid while the same window is open; after another window opens, list it " +
+        "again or name controls by what they say. To open an object's window, select it with gd_select_objects " +
+        "and click editObject (a trigger's settings), editSpecial or editGroup. What a window changes goes into " +
+        "the level like the user's own edits, and the object keeps its uid. Other editing tools refuse while a " +
+        "window is open, so close it (its OK button or back) when done.",
+      inputSchema: {
+        actions: z.array(uiAction).max(50).optional(),
+        all: z.boolean().optional().describe("Also list controls that are hidden, e.g. on other pages of the window"),
+        filter: z.string().max(80).optional().describe("List only controls whose words, label or name contain this"),
+      },
+    },
+    async ({ actions = [], all, filter }) => {
+      try {
+        const text = await runUi(bridge, actions, { all, filter });
+        return { content: [{ type: "text", text }] };
       } catch (error) {
         return failure(error);
       }

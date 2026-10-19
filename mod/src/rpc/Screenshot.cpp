@@ -4,6 +4,7 @@
 // MCP server to encode; a JSON reply would be far too large for them.
 #include "Rpc.hpp"
 
+#include <cmath>
 #include <fstream>
 
 using namespace geode::prelude;
@@ -39,6 +40,11 @@ namespace gdforge::rpc {
                 { "path", path.string() },
                 { "width", width },
                 { "height", height },
+                // The size in points, the unit gd_ui positions are in
+                { "points", matjson::makeObject({
+                    { "width", static_cast<int>(std::lround(size.width)) },
+                    { "height", static_cast<int>(std::lround(size.height)) },
+                }) },
             }));
         }
     }

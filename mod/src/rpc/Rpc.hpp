@@ -14,6 +14,7 @@ namespace gdforge::rpc {
     void registerCatalog(RpcRegistry& registry);
     void registerPlaytest(RpcRegistry& registry);
     void registerScreenshot(RpcRegistry& registry);
+    void registerUi(RpcRegistry& registry);
 
     struct Editor {
         LevelEditorLayer* layer;

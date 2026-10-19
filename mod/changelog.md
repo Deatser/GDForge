@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.0
+- The game's windows can be used like by hand: trigger settings, Edit Object, Edit Group, Edit Special, HSV, the pause menu and anything they open. Buttons, checkboxes, text fields and sliders are listed with their labels, and can be clicked, set, typed into and moved; the screen can be tapped and dragged
+
 ## v0.3.3
 - Zooming during a playtest; the background and ground follow a view held on a point
 

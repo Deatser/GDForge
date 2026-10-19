@@ -21,6 +21,7 @@ namespace gdforge {
                 rpc::registerCatalog(registry);
                 rpc::registerPlaytest(registry);
                 rpc::registerScreenshot(registry);
+                rpc::registerUi(registry);
                 return registry;
             }();
             return methods;

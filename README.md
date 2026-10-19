@@ -86,6 +86,7 @@ Changes are not saved until you save in the editor, exactly as with your own edi
 | `gd_set_camera` | Move and zoom the editor view, also during a playtest; switch Hide Invisible |
 | `gd_playtest`, `gd_test` | Start or stop the playtest; play the level automatically with planned jumps, and in platformer with left and right, and report where the player died |
 | `gd_screenshot` | Picture of what the game shows |
+| `gd_ui` | Use the game's windows like by hand: list the controls of a trigger's settings, Edit Object, Edit Group, Edit Special, HSV, the pause menu or the editor's buttons, then click, tick, type, slide, tap and drag |
 | `gd_save_level` | Save the open level and write it to disk |
 | `gd_get_level_settings`, `gd_set_level_settings` | Read and change the level settings: start speed and mode, game type, options, art, font, song with its offset and fades, start colours |
 | `gd_get_level_string` | The open level as the game saves it, settings included |
@@ -140,11 +141,11 @@ Two data files describe the game and are generated, not written by hand:
 | `src/net/HttpServer.cpp` | Localhost HTTP transport and request filtering |
 | `src/Bridge.cpp` | JSON-RPC dispatch |
 | `src/GameThread.cpp` | Runs requests on the game's own thread, also while the game is paused in the background |
-| `src/rpc/*.cpp` | The methods: objects, editor, levels, catalog, playtest, screenshot |
+| `src/rpc/*.cpp` | The methods: objects, editor, levels, catalog, playtest, screenshot, windows |
 
 ## Status
 
-Version 0.3 covers objects (reading, placing, editing, transforming, copying, deleting, selection, undo), level settings, automated playtests of classic and platformer sections, screenshots, saving and the level's song.
+Version 0.4 covers objects (reading, placing, editing, transforming, copying, deleting, selection, undo), level settings, automated playtests of classic and platformer sections, screenshots, saving, the level's song, and using the game's windows.
 
 The macOS build is tested in the game on Apple Silicon, the Windows build on Windows 11 with GD 2.2081.
 
