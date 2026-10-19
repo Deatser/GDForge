@@ -736,7 +736,8 @@ export function createServer(bridge: Bridge): McpServer {
       description:
         "Centre the editor view on a point and/or set the zoom (0.1 to 4, 1 is default). During a playtest the " +
         "view stays on the point instead of following the player, until follow: true or the next playtest, and " +
-        "zoom works like a zoom trigger until the playtest ends. hideInvisible switches the editor's own " +
+        "zoom works like a zoom trigger until the playtest ends. The ground follows a pinned view, the " +
+        "background picture may not, so do not judge heights by it. hideInvisible switches the editor's own " +
         "Hide Invisible option (its pause menu): objects with Hide ticked disappear from the view and from " +
         "screenshots, while triggers and Collision Blocks stay visible. It is the user's setting and stays as set.",
       inputSchema: {
