@@ -22,6 +22,7 @@ namespace gdforge {
                 rpc::registerPlaytest(registry);
                 rpc::registerScreenshot(registry);
                 rpc::registerUi(registry);
+                rpc::registerAudio(registry);
                 return registry;
             }();
             return methods;

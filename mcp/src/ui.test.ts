@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { BridgeError } from "./bridge.js";
-import { formatControl, formatUi, runUi, toStep, type UiState } from "./ui.js";
+import { formatControl, formatUi, parseKey, runUi, toStep, type UiState } from "./ui.js";
 
 const popup: UiState = {
   layer: "SetupMoveCommandPopup",
@@ -26,6 +26,18 @@ test("turns each action into one bridge call", () => {
   assert.deepEqual(toStep({ drag: [1, 2, 3, 4] }, 0), { act: { action: "drag", x: 1, y: 2, toX: 3, toY: 4 } });
   assert.deepEqual(toStep({ back: true }, 0), { act: { action: "back" } });
   assert.deepEqual(toStep({ wait: 0.5 }, 0), { wait: 0.5 });
+});
+
+test("reads keys and combinations", () => {
+  assert.deepEqual(parseKey("d"), { code: 0x44, shift: false, ctrl: false, alt: false });
+  assert.deepEqual(parseKey("Ctrl+1"), { code: 0x31, shift: false, ctrl: true, alt: false });
+  assert.deepEqual(parseKey("alt+shift+space"), { code: 0x20, shift: true, ctrl: false, alt: true });
+  assert.equal(parseKey("f12").code, 0x7b);
+  assert.throws(() => parseKey("meta+a"), /Unknown modifier "meta"/);
+  assert.throws(() => parseKey("pgup"), /Unknown key "pgup"/);
+  assert.deepEqual(toStep({ keyDown: "d" }, 0), {
+    act: { action: "key", phase: "down", name: "d", code: 0x44, shift: false, ctrl: false, alt: false },
+  });
 });
 
 test("rejects an action with no verb, two verbs or a missing value", () => {

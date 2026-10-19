@@ -17,6 +17,10 @@ export interface UiAction {
   value?: number | undefined;
   tap?: [number, number] | undefined;
   drag?: [number, number, number, number] | undefined;
+  // A key or combination such as "d", "space" or "ctrl+1"
+  key?: string | undefined;
+  keyDown?: string | undefined;
+  keyUp?: string | undefined;
   back?: boolean | undefined;
   wait?: number | undefined;
 }
@@ -59,7 +63,28 @@ export interface UiState {
 type BridgeAction = Record<string, unknown> & { action: string };
 type Step = { act: BridgeAction } | { wait: number };
 
-const VERBS = ["click", "check", "type", "slide", "tap", "drag", "back", "wait"] as const;
+const VERBS = ["click", "check", "type", "slide", "tap", "drag", "key", "keyDown", "keyUp", "back", "wait"] as const;
+
+// Key names to the Windows virtual-key codes the game uses on every platform
+const NAMED_KEYS: Record<string, number> = {
+  space: 0x20, enter: 0x0d, escape: 0x1b, tab: 0x09, backspace: 0x08, delete: 0x2e,
+  left: 0x25, up: 0x26, right: 0x27, down: 0x28, shift: 0x10, ctrl: 0x11, alt: 0x12,
+};
+
+// "ctrl+shift+d" -> the key's code and the modifiers held with it.
+export function parseKey(combo: string): { code: number; shift: boolean; ctrl: boolean; alt: boolean } {
+  const parts = combo.toLowerCase().split("+").map((part) => part.trim());
+  const name = parts.pop() ?? "";
+  const modifiers = new Set(parts);
+  for (const modifier of modifiers) {
+    if (!["shift", "ctrl", "alt"].includes(modifier)) throw new Error(`Unknown modifier "${modifier}" in "${combo}"; use shift, ctrl or alt.`);
+  }
+  let code = NAMED_KEYS[name];
+  if (code === undefined && /^[a-z0-9]$/.test(name)) code = name.toUpperCase().charCodeAt(0);
+  if (code === undefined && /^f([1-9]|1[0-2])$/.test(name)) code = 0x6f + Number(name.slice(1));
+  if (code === undefined) throw new Error(`Unknown key "${name}"; use a letter, a digit, f1-f12 or one of ${Object.keys(NAMED_KEYS).join(", ")}.`);
+  return { code, shift: modifiers.has("shift"), ctrl: modifiers.has("ctrl"), alt: modifiers.has("alt") };
+}
 
 // One action as the bridge takes it, or a pause between actions.
 export function toStep(action: UiAction, index: number): Step {
@@ -71,7 +96,8 @@ export function toStep(action: UiAction, index: number): Step {
     if (value === undefined) throw new Error(`Action ${index + 1} needs ${what}.`);
     return value;
   };
-  switch (verbs[0]!) {
+  const verb = verbs[0]!;
+  switch (verb) {
     case "click":
       return { act: { action: "click", target: action.click } };
     case "check":
@@ -87,6 +113,13 @@ export function toStep(action: UiAction, index: number): Step {
     case "drag": {
       const [x, y, toX, toY] = action.drag!;
       return { act: { action: "drag", x, y, toX, toY } };
+    }
+    case "key":
+    case "keyDown":
+    case "keyUp": {
+      const phase = { key: "press", keyDown: "down", keyUp: "up" }[verb];
+      const name = action[verb]!;
+      return { act: { action: "key", phase, name, ...parseKey(name) } };
     }
     case "back":
       return { act: { action: "back" } };
@@ -133,6 +166,8 @@ function describeDone(step: BridgeAction, result: Record<string, unknown>): stri
       return `tap ${step["x"]},${step["y"]}`;
     case "drag":
       return `drag ${step["x"]},${step["y"]} to ${step["toX"]},${step["toY"]}`;
+    case "key":
+      return `${{ press: "key", down: "keyDown", up: "keyUp" }[step["phase"] as string]} ${step["name"]}`;
     default:
       return `${step.action} ${target}`.trim();
   }

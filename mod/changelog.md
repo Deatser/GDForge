@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.2
+- Which sounds are playing and how loud each comes out
+- Keys can be pressed and held, for the editor's shortcuts and for walking in a played level
+
 ## v0.4.1
 - Windows are listed with their labels and titles
 

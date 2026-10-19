@@ -23,7 +23,7 @@ import { joinObjects, parseFields } from "./saveString.js";
 import { GD_VERSION, schemaFor, searchProperties } from "./schema.js";
 import { runUi } from "./ui.js";
 
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 
 // The most objects one call may create or rewrite. Keeps a single mistaken
 // call from flooding a level, and the request small enough to stay responsive.
@@ -1041,6 +1041,21 @@ export function createServer(bridge: Bridge): McpServer {
     },
   );
 
+  tool(
+    "gd_audio",
+    {
+      title: "What is playing",
+      description:
+        "Every sound the game is playing right now: the file, its group, its own volume, how loud it actually " +
+        "comes out (audible: every volume applied to it multiplied together), pitch and position, and the " +
+        "player's music and SFX volume settings. Checks sound triggers without listening: call it during a playtest, " +
+        "e.g. near and far from a proximity sound, before and after an Edit SFX or Edit Song.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => bridge.call("audio.playing"),
+  );
+
   const uiTarget = z
     .union([z.number().int(), z.string()])
     .describe("The control's number from the listing, or what it says or is labelled, or an editor button's name");
@@ -1054,6 +1069,9 @@ export function createServer(bridge: Bridge): McpServer {
     value: z.number().min(0).max(1).optional().describe("0 left, 1 right"),
     tap: z.tuple([z.number(), z.number()]).optional().describe("Touch the screen at [x, y] in points"),
     drag: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional().describe("Drag from [x, y] to [toX, toY]"),
+    key: z.string().max(40).optional().describe('Press and let go a key, e.g. "d", "space", "ctrl+1"'),
+    keyDown: z.string().max(40).optional().describe("Hold a key down until keyUp"),
+    keyUp: z.string().max(40).optional(),
     back: z.boolean().optional().describe("Escape: closes the window on top"),
     wait: z.number().min(0).max(10).optional().describe("Seconds to wait"),
   });
@@ -1072,7 +1090,9 @@ export function createServer(bridge: Bridge): McpServer {
         "sets. Actions run in order, each like a click of the user's, and the window is listed again afterwards. " +
         "Each action has one verb: click (a button or checkbox), check + on (set a checkbox), type + text (fill " +
         "a field as if typed, then left), slide + value (0-1), tap [x, y] and drag [x, y, toX, toY] (touch the " +
-        "screen, e.g. a preview or a colour wheel), back (Escape) or wait (seconds). Name controls by number, " +
+        "screen, e.g. a preview or a colour wheel), key / keyDown / keyUp (\"d\", \"space\", \"ctrl+1\"; the " +
+        "editor's shortcuts, or walking in a level played with Save and Play), back (Escape) or wait (seconds). " +
+        "Name controls by number, " +
         'or by what they say ("OK", a label such as "Move X") or, in the editor, by button name: editObject, ' +
         "editGroup, editSpecial, editHSV, copyValues, pasteState, pasteColor, goToLayer, deselect, playtest, " +
         "stopPlaytest. Numbers stay valid while the same window is open; after another window opens, list it " +

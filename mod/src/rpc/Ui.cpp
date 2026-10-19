@@ -481,6 +481,20 @@ namespace gdforge::rpc {
                 }
                 touch(from, to);
             }
+            else if (action == "key") {
+                // A key as the keyboard sends it: pressed and let go, or only one of the two to hold it
+                auto code = optInt(params["code"]);
+                if (!code) return fail("bad_request", "Give the key.");
+                auto phase = params["phase"].asString().unwrapOr("press");
+                auto keyboard = CCKeyboardDispatcher::get();
+                auto key = static_cast<enumKeyCodes>(*code);
+                keyboard->updateModifierKeys(flag(params["shift"], false), flag(params["ctrl"], false), flag(params["alt"], false), false);
+                if (phase != "up") keyboard->dispatchKeyboardMSG(key, true, false, 0.0);
+                if (phase != "down") {
+                    keyboard->dispatchKeyboardMSG(key, false, false, 0.0);
+                    keyboard->updateModifierKeys(false, false, false, false);
+                }
+            }
             else if (action == "back") {
                 // What Escape does: closes a popup, or opens the pause menu over the editor
                 if (auto layer = typeinfo_cast<CCLayer*>(root)) layer->keyBackClicked();
@@ -539,7 +553,7 @@ namespace gdforge::rpc {
                     result["value"] = static_cast<double>(sliderValue(slider));
                 }
                 else {
-                    return fail("bad_request", "Unknown action. Use click, check, type, slide, tap, drag or back.");
+                    return fail("bad_request", "Unknown action. Use click, check, type, slide, tap, drag, key or back.");
                 }
             }
 
